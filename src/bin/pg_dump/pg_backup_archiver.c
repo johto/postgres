@@ -2121,6 +2121,10 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 		case archTar:
 			InitArchiveFmt_Tar(AH);
 			break;
+		
+		case archSplit:
+			InitArchiveFmt_Split(AH);
+			break;
 
 		default:
 			exit_horribly(modulename, "unrecognized file format \"%d\"\n", fmt);
@@ -3019,79 +3023,6 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, RestoreOptions *ropt, bool isDat
 			return;
 	}
 
-	/*
-	 * Split object into separate file,
-	 * if the --split option is enabled and,
-	 * if the object has an oid and,
-	 * if the object has a namespace.
-	*/
-	if (ropt->split_files && te->catalogId.oid && te->namespace)
-	{
-		char		splitFilename[1024];
-		char		*tag;
-		char		*tagArgPos;
-		char		*desc;
-		char		*descSpacePos;
-		mode_t		omode;
-
-		/*
-		 * Strip eventual argument part from "tag" (e.g. the name of functions)
-		 * Example: "foobar(_arg1 int, _arg2 int)" --> "foobar"
-		 */
-		tagArgPos = strstr(te->tag,"(");
-		if (tagArgPos == NULL)
-			tag = strdup(te->tag);
-		else
-			tag = strndup(te->tag, tagArgPos - te->tag);
-
-		desc = strdup(te->desc);
-		descSpacePos = strstr(desc," ");
-		/*
-		 * Replace " " with "_" in "desc"
-		 * Example: "FK CONSTRAINT" --> "FK_CONSTRAINT"
-		 */
-		while ((descSpacePos = strstr(desc, " ")) != NULL)
-		{
-			char *dup = strdup(desc);
-			strlcpy(desc, dup, descSpacePos - desc + 1);
-			strcat(desc, "_");
-			strcat(desc, dup + (descSpacePos - desc) + strlen("_"));
-			free(dup);
-		}
-
-		/*
-		 * Build path consisting of [filename]-split/[schema]/[desc]/[tag].sql
-		 * Create the directories
-		 *
-		 * Example: dumpfile-split/public/FUNCTION/foobar.sql
-		 */
-		omode = S_IRWXU | S_IRWXG | S_IRWXO;
-		snprintf(splitFilename, 1024, "%s-split", ropt->filename);
-		mkdir(splitFilename, omode);
-		snprintf(splitFilename, 1024, "%s-split/%s", ropt->filename, te->namespace);
-		mkdir(splitFilename, omode);
-		snprintf(splitFilename, 1024, "%s-split/%s/%s", ropt->filename, te->namespace, desc);
-		mkdir(splitFilename, omode);
-
-		snprintf(splitFilename, 1024, "%s-split/%s/%s/%s.sql", ropt->filename, te->namespace, desc, tag);
-
-		/* Add \i <split file name> to main dump file */
-		ahprintf(AH, "\\i %s\n", splitFilename);
-
-		/*
-		 * Close the normal file handle to which non-splittable
-		 * objects are written.
-		 *
-		 * Open split file handle for splitFilename.
-		 *
-		 * In the end of the function,
-		 * the split file handle will be closed, and
-		 * the normal file handle will be reopened again.
-		 */
-		fclose(AH->OF);
-		AH->OF = fopen(splitFilename, PG_BINARY_A);
-	}
-
 	/* Select owner, schema, and tablespace as necessary */
 	_becomeOwner(AH, te);
 	_selectOutputSchema(AH, te->namespace);
@@ -3253,16 +3184,6 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, RestoreOptions *ropt, bool isDat
 		if (AH->currUser)
 			free(AH->currUser);
 		AH->currUser = NULL;
-	}
-
-	/*
-	 * If we are using the --split option,
-	 * close the split file handle, and reopen the normal file handle.
-	 */
-	if (ropt->split_files && te->catalogId.oid && te->namespace)
-	{
-		fclose(AH->OF);
-		AH->OF = fopen(ropt->filename, PG_BINARY_A);
 	}
 }
 

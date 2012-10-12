@@ -50,7 +50,8 @@ typedef enum _archiveFormat
 	archCustom = 1,
 	archTar = 3,
 	archNull = 4,
-	archDirectory = 5
+	archDirectory = 5,
+	archSplit = 6
 } ArchiveFormat;
 
 typedef enum _archiveMode

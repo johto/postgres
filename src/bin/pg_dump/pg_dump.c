@@ -961,6 +961,8 @@ parseArchiveFormat(const char *format, ArchiveMode *mode)
 		archiveFormat = archTar;
 	else if (pg_strcasecmp(format, "tar") == 0)
 		archiveFormat = archTar;
+	else if (pg_strcasecmp(format, "split") == 0)
+		archiveFormat = archSplit;
 	else
 		exit_horribly(NULL, "invalid output format \"%s\" specified\n", format);
 	return archiveFormat;
