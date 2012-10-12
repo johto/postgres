@@ -151,7 +151,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 		_CreateDirectory("%s/EXTENSIONS", ctx->directory);
 	}
 	else
-        exit_horribly(modulename, "reading an archive not supported; restore using psql\n");
+        exit_horribly(modulename, "reading a split archive not supported; restore using psql\n");
 }
 
 static void
