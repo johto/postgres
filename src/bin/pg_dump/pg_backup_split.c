@@ -62,13 +62,7 @@ static size_t _WriteData(ArchiveHandle *AH, const void *data, size_t dLen);
 static int	_WriteByte(ArchiveHandle *AH, const int i);
 static int	_ReadByte(ArchiveHandle *);
 static size_t _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len);
-static size_t _ReadBuf(ArchiveHandle *AH, void *buf, size_t len);
 static void _CloseArchive(ArchiveHandle *AH);
-static void _PrintTocData(ArchiveHandle *AH, TocEntry *te, RestoreOptions *ropt);
-
-static void _WriteExtraToc(ArchiveHandle *AH, TocEntry *te);
-static void _ReadExtraToc(ArchiveHandle *AH, TocEntry *te);
-static void _PrintExtraToc(ArchiveHandle *AH, TocEntry *te);
 
 static void _WriteIndexFile(ArchiveHandle *AH);
 
@@ -76,7 +70,6 @@ static void _StartBlobs(ArchiveHandle *AH, TocEntry *te);
 static void _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
-static void _LoadBlobs(ArchiveHandle *AH, RestoreOptions *ropt);
 
 static char *prependDirectory(ArchiveHandle *AH, const char *relativeFilename);
 
@@ -120,13 +113,13 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->WriteBytePtr = _WriteByte;
 	AH->ReadBytePtr = _ReadByte;
 	AH->WriteBufPtr = _WriteBuf;
-	AH->ReadBufPtr = _ReadBuf;
+	AH->ReadBufPtr = NULL;
 	AH->ClosePtr = _CloseArchive;
 	AH->ReopenPtr = NULL;
-	AH->PrintTocDataPtr = _PrintTocData;
-	AH->ReadExtraTocPtr = _ReadExtraToc;
-	AH->WriteExtraTocPtr = _WriteExtraToc;
-	AH->PrintExtraTocPtr = _PrintExtraToc;
+	AH->PrintTocDataPtr = NULL;
+	AH->ReadExtraTocPtr = NULL;
+	AH->WriteExtraTocPtr = NULL;
+	AH->PrintExtraTocPtr = NULL;
 
 	AH->StartBlobsPtr = _StartBlobs;
 	AH->StartBlobPtr = _StartBlob;
@@ -147,10 +140,6 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->lo_buf_size = LOBBUFSIZE;
 	AH->lo_buf = (void *) pg_malloc(LOBBUFSIZE);
 
-	/*
-	 * Now open the TOC file
-	 */
-
 	if (!AH->fSpec || strcmp(AH->fSpec, "") == 0)
 		exit_horribly(modulename, "no output directory specified\n");
 
@@ -162,38 +151,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 		_CreateDirectory("%s/EXTENSIONS", ctx->directory);
 	}
 	else
-	{							/* Read Mode */
-#if 0
-		char	   *fname;
-		cfp		   *tocFH;
-
-		fname = prependDirectory(AH, "index.sql");
-
-		tocFH = cfopen_read(fname, PG_BINARY_R);
-		if (tocFH == NULL)
-			exit_horribly(modulename,
-						  "could not open input file \"%s\": %s\n",
-						  fname, strerror(errno));
-
-		ctx->dataFH = tocFH;
-
-		/*
-		 * The TOC of a directory format dump shares the format code of the
-		 * tar format.
-		 */
-		AH->format = archTar;
-		ReadHead(AH);
-		AH->format = archDirectory;
-		ReadToc(AH);
-
-		/* Nothing else in the file, so close it again... */
-		if (cfclose(tocFH) != 0)
-			exit_horribly(modulename, "could not close TOC file: %s\n",
-						  strerror(errno));
-		ctx->dataFH = NULL;
-#endif
-        exit_horribly(modulename, "reading not supported. sorry\n");
-	}
+        exit_horribly(modulename, "reading an archive not supported; restore using psql\n");
 }
 
 static void
@@ -215,13 +173,6 @@ _CreateSchemaDirectoryStructure(ArchiveHandle *AH, const char *tag)
 	_CreateDirectory("%s/%s/TYPES", dname, tag);
 	_CreateDirectory("%s/%s/TRIGGERS", dname, tag);
 	_CreateDirectory("%s/%s/AGGREGATES", dname, tag);
-
-#if 0
-	snprintf(dpath, MAXPGPATH, "%s/F", dname);
-	_CreateDirectory(dpath);
-	snprintf(dpath, MAXPGPATH, "%s/FUNCTIONS", dname);
-	_CreateDirectory(dpath);
-#endif
 }
 
 /*
@@ -368,67 +319,6 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 	tctx->filename = NULL;
 }
 
-/*
- * Called by the Archiver to save any extra format-related TOC entry
- * data.
- *
- * Use the Archiver routines to write data - they are non-endian, and
- * maintain other important file information.
- */
-static void
-_WriteExtraToc(ArchiveHandle *AH, TocEntry *te)
-{
-	lclTocEntry *tctx = (lclTocEntry *) te->formatData;
-
-	/*
-	 * A dumpable object has set tctx->filename, any other object has not.
-	 * (see _ArchiveEntry).
-	 */
-	if (tctx->filename)
-		WriteStr(AH, tctx->filename);
-	else
-		WriteStr(AH, "");
-}
-
-/*
- * Called by the Archiver to read any extra format-related TOC data.
- *
- * Needs to match the order defined in _WriteExtraToc, and should also
- * use the Archiver input routines.
- */
-static void
-_ReadExtraToc(ArchiveHandle *AH, TocEntry *te)
-{
-	lclTocEntry *tctx = (lclTocEntry *) te->formatData;
-
-	fprintf(stderr, "_ReadExtraToc() called\n");
-
-	if (tctx == NULL)
-	{
-		tctx = (lclTocEntry *) pg_malloc0(sizeof(lclTocEntry));
-		te->formatData = (void *) tctx;
-	}
-
-	tctx->filename = ReadStr(AH);
-	if (strlen(tctx->filename) == 0)
-	{
-		free(tctx->filename);
-		tctx->filename = NULL;
-	}
-}
-
-/*
- * Called by the Archiver when restoring an archive to output a comment
- * that includes useful information about the TOC entry.
- */
-static void
-_PrintExtraToc(ArchiveHandle *AH, TocEntry *te)
-{
-	lclTocEntry *tctx = (lclTocEntry *) te->formatData;
-
-	if (AH->public.verbose && tctx->filename)
-		ahprintf(AH, "-- File: %s\n", tctx->filename);
-}
 
 /*
  * Called by the archiver when saving TABLE DATA (not schema). This routine
@@ -494,106 +384,6 @@ _EndData(ArchiveHandle *AH, TocEntry *te)
 }
 
 /*
- * Print data for a given file (can be a BLOB as well)
- */
-static void
-_PrintFileData(ArchiveHandle *AH, char *filename, RestoreOptions *ropt)
-{
-	size_t		cnt;
-	char	   *buf;
-	size_t		buflen;
-	cfp		   *cfp;
-
-	if (!filename)
-		return;
-
-	cfp = cfopen_read(filename, PG_BINARY_R);
-
-	if (!cfp)
-		exit_horribly(modulename, "could not open input file \"%s\": %s\n",
-					  filename, strerror(errno));
-
-	buf = pg_malloc(ZLIB_OUT_SIZE);
-	buflen = ZLIB_OUT_SIZE;
-
-	while ((cnt = cfread(buf, buflen, cfp)))
-		ahwrite(buf, 1, cnt, AH);
-
-	free(buf);
-	if (cfclose(cfp) !=0)
-		exit_horribly(modulename, "could not close data file: %s\n",
-					  strerror(errno));
-}
-
-/*
- * Print data for a given TOC entry
-*/
-static void
-_PrintTocData(ArchiveHandle *AH, TocEntry *te, RestoreOptions *ropt)
-{
-	lclTocEntry *tctx = (lclTocEntry *) te->formatData;
-
-	if (!tctx->filename)
-		return;
-
-	if (strcmp(te->desc, "BLOBS") == 0)
-		_LoadBlobs(AH, ropt);
-	else
-	{
-		char	   *fname = prependDirectory(AH, tctx->filename);
-
-		_PrintFileData(AH, fname, ropt);
-	}
-}
-
-static void
-_LoadBlobs(ArchiveHandle *AH, RestoreOptions *ropt)
-{
-	Oid			oid;
-	lclContext *ctx = (lclContext *) AH->formatData;
-	char	   *fname;
-	char		line[MAXPGPATH];
-
-	StartRestoreBlobs(AH);
-
-	fname = prependDirectory(AH, "blobs.toc");
-
-	ctx->blobsTocFH = cfopen_read(fname, PG_BINARY_R);
-
-	if (ctx->blobsTocFH == NULL)
-		exit_horribly(modulename, "could not open large object TOC file \"%s\" for input: %s\n",
-					  fname, strerror(errno));
-
-	/* Read the blobs TOC file line-by-line, and process each blob */
-	while ((cfgets(ctx->blobsTocFH, line, MAXPGPATH)) != NULL)
-	{
-		char		fname[MAXPGPATH];
-		char		path[MAXPGPATH];
-
-		if (sscanf(line, "%u %s\n", &oid, fname) != 2)
-			exit_horribly(modulename, "invalid line in large object TOC file \"%s\": \"%s\"\n",
-						  fname, line);
-
-		StartRestoreBlob(AH, oid, ropt->dropSchema);
-		snprintf(path, MAXPGPATH, "%s/%s", ctx->directory, fname);
-		_PrintFileData(AH, path, ropt);
-		EndRestoreBlob(AH, oid);
-	}
-	if (!cfeof(ctx->blobsTocFH))
-		exit_horribly(modulename, "error reading large object TOC file \"%s\"\n",
-					  fname);
-
-	if (cfclose(ctx->blobsTocFH) != 0)
-		exit_horribly(modulename, "could not close large object TOC file \"%s\": %s\n",
-					  fname, strerror(errno));
-
-	ctx->blobsTocFH = NULL;
-
-	EndRestoreBlobs(AH);
-}
-
-
-/*
  * Write a byte of data to the archive.
  * Called by the archiver to do integer & byte output to the archive.
  * These routines are only used to read & write the headers & TOC.
@@ -648,22 +438,6 @@ _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len)
 }
 
 /*
- * Read a block of bytes from the archive.
- *
- * Called by the archiver to read a block of bytes from the archive
- */
-static size_t
-_ReadBuf(ArchiveHandle *AH, void *buf, size_t len)
-{
-	lclContext *ctx = (lclContext *) AH->formatData;
-	size_t		res;
-
-	res = cfread(buf, len, ctx->dataFH);
-
-	return res;
-}
-
-/*
  * Close the archive.
  *
  * When writing the archive, this is the routine that actually starts
@@ -678,39 +452,11 @@ _ReadBuf(ArchiveHandle *AH, void *buf, size_t len)
 static void
 _CloseArchive(ArchiveHandle *AH)
 {
-	lclContext *ctx = (lclContext *) AH->formatData;
-
 	if (AH->mode == archModeWrite)
 	{
-		cfp		   *tocFH;
-		char	   *fname = prependDirectory(AH, "toc.dat");
-
-		/* The TOC is always created uncompressed */
-		tocFH = cfopen_write(fname, PG_BINARY_W, 0);
-		if (tocFH == NULL)
-			exit_horribly(modulename, "could not open output file \"%s\": %s\n",
-						  fname, strerror(errno));
-		ctx->dataFH = tocFH;
-
-#if 0
-		/*
-		 * Write 'tar' in the format field of the toc.dat file. The directory
-		 * is compatible with 'tar', so there's no point having a different
-		 * format code for it.
-		 */
-		AH->format = archTar;
-		WriteHead(AH);
-		AH->format = archDirectory;
-		WriteToc(AH);
-#endif
-		if (cfclose(tocFH) != 0)
-			exit_horribly(modulename, "could not close TOC file: %s\n",
-						  strerror(errno));
 		WriteDataChunks(AH);
-
 		_WriteIndexFile(AH);
 	}
-	AH->FH = NULL;
 }
 
 
