@@ -553,6 +553,7 @@ _WriteIndexFile(ArchiveHandle *AH)
 		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
 
 	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
+	fprintf(indexFH, "BEGIN;\n");
 	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
 	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
 
@@ -591,6 +592,7 @@ _WriteIndexFile(ArchiveHandle *AH)
 			fprintf(indexFH, "\\i %s\n", tctx->filename);
 	}
 
+	fprintf(indexFH, "COMMIT;\n");
 	fclose(indexFH);
 }
 
