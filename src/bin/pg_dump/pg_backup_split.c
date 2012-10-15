@@ -541,6 +541,23 @@ _CreateSortedToc(ArchiveHandle *AH)
 }
 
 static void
+_SetSearchPath(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+{
+	if (!te->namespace)
+		return;
+
+	/*
+	 * We want to add the namespace to information to each object regardless
+	 * of the previous object's namespace; that way it is easy to see when an
+	 * object is moved to another schema.
+	 */
+	if (strcmp(te->namespace, "pg_catalog") == 0)
+		fprintf(fh, "SET search_path TO pg_catalog;\n\n");
+	else
+		fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", fmtId(te->namespace));
+}
+
+static void
 _AddOwnershipInformation(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 {
 	const char *type = te->desc;
@@ -608,8 +625,8 @@ _WriteIndexFile(ArchiveHandle *AH)
 			exit_horribly(modulename, "could not open file \"%s\": %s\n",
 							filename, strerror(errno));
 
-		if (te->namespace)
-			fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", te->namespace);
+		_SetSearchPath(AH, te, fh);
+
 		fprintf(fh, "%s\n", te->defn);
 
 		_AddOwnershipInformation(AH, te, fh);
