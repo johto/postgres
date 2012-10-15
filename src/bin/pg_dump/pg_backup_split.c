@@ -321,7 +321,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 		return;
 	}
 
-	tctx->filename = NULL;
+	exit_horribly(modulename, "unknown object \"%s\"\n", te->desc);
 }
 
 
@@ -568,14 +568,14 @@ _WriteIndexFile(ArchiveHandle *AH)
 		if (te->dataDumper)
 			continue;
 
+		/* we need to skip this entry, see _ArchiveEntry() */
 		if (!tctx->filename)
-		{
-			/* only DATABASE is safe to skip */
-			if (strcmp(te->desc, "DATABASE") != 0)
-				exit_horribly(modulename, "I don't know where to dump \"%s\". Sorry.\n", te->desc);
-
 			continue;
-		}
+
+		/* special case: don't try to re-create the "public" schema */
+		if (strcmp(te->desc, "SCHEMA") == 0 &&
+			strcmp(te->tag, "public") == 0)
+			continue;
 
 		filename = prependDirectory(AH, tctx->filename);
 
