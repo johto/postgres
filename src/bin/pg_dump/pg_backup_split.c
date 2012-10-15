@@ -541,6 +541,29 @@ _CreateSortedToc(ArchiveHandle *AH)
 }
 
 static void
+_AddOwnershipInformation(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+{
+	const char *type = te->desc;
+
+	/* Use ALTER TABLE for views and sequences */
+	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
+		type = "TABLE";
+
+	if (strcmp(type, "FUNCTION") == 0 ||
+		strcmp(type, "TABLE") == 0 ||
+		strcmp(type, "SCHEMA") == 0 ||
+		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(type, "TYPE") == 0 ||
+		strcmp(type, "AGGREGATE") == 0)
+	{
+		if (te->namespace)
+			fprintf(fh, "ALTER %s %s.%s OWNER TO %s;\n", type, te->namespace, te->tag, te->owner);
+		else
+			fprintf(fh, "ALTER %s %s OWNER TO %s;\n", type, te->tag, te->owner);
+	}
+}
+
+static void
 _WriteIndexFile(ArchiveHandle *AH)
 {
 	TocEntry *te;
@@ -588,6 +611,9 @@ _WriteIndexFile(ArchiveHandle *AH)
 		if (te->namespace)
 			fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", te->namespace);
 		fprintf(fh, "%s\n", te->defn);
+
+		_AddOwnershipInformation(AH, te, fh);
+
 		fclose(fh);
 
 		if (_ShouldAddIndexEntry(AH, te))
