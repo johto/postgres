@@ -482,14 +482,14 @@ static int lclTocEntryCmp(const void *av, const void *bv)
 }
 
 static bool
-_ShouldAddIndexEntry(ArchiveHandle *AH, lclTocEntry **key)
+_ShouldAddIndexEntry(ArchiveHandle *AH, TocEntry *te)
 {
 	lclTocEntry **sortedToc;
-	lclTocEntry **pprevte;
+	lclTocEntry **pte;
 	lclTocEntry **key;
 	lclTocEntry *prevte;
 
-	key = 
+	key = (lclTocEntry **) &te->formatData;
 
 	sortedToc = ((lclContext *) AH->formatData)->sortedToc;
 	if (!sortedToc)
@@ -510,8 +510,8 @@ _ShouldAddIndexEntry(ArchiveHandle *AH, lclTocEntry **key)
 	 * an index entry for this TocEntry.  Note that NULLs sort last so the
 	 * previous entry's filename can never be NULL.
 	 */
-	te = *(pte - 1);
-	return strcmp(te->filename, (*key)->filename) != 0;
+	prevte = *(pte - 1);
+	return strcmp(prevte->filename, (*key)->filename) != 0;
 }
 
 /*
