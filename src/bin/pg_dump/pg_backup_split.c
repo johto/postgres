@@ -32,6 +32,12 @@
 
 typedef struct
 {
+	char	   *filename;		/* filename excluding the directory (basename) */
+	DumpId		dumpId;			/* dump id of the TocEntry */
+} lclTocEntry;
+
+typedef struct
+{
 	/*
 	 * Our archive location. This is basically what the user specified as his
 	 * backup file but of course here it is a directory.
@@ -41,12 +47,9 @@ typedef struct
 	cfp		   *dataFH;			/* currently open data file */
 
 	cfp		   *blobsTocFH;		/* file handle for blobs.toc */
-} lclContext;
 
-typedef struct
-{
-	char	   *filename;		/* filename excluding the directory (basename) */
-} lclTocEntry;
+	lclTocEntry **sortedToc;	/* array of toc entires sorted by (filename, dumpId) */
+} lclContext;
 
 /* translator: this is a module name */
 static const char *modulename = gettext_noop("split archiver");
@@ -135,6 +138,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 
 	ctx->dataFH = NULL;
 	ctx->blobsTocFH = NULL;
+	ctx->sortedToc = NULL;
 
 	/* Initialize LO buffering */
 	AH->lo_buf_size = LOBBUFSIZE;
@@ -187,6 +191,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 	char		fn[MAXPGPATH];
 
 	tctx = (lclTocEntry *) pg_malloc0(sizeof(lclTocEntry));
+	tctx->dumpId = te->dumpId;
 	te->formatData = (void *) tctx;
 
 	if (te->dataDumper)
@@ -336,8 +341,6 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char	   *fname;
 
-	//fprintf(stderr, "_StartData %s.%s\n", te->namespace, te->tag);
-
 	fname = prependDirectory(AH, tctx->filename);
 
 	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, AH->compression);
@@ -460,10 +463,98 @@ _CloseArchive(ArchiveHandle *AH)
 }
 
 
+static int lclTocEntryCmp(const void *av, const void *bv)
+{
+	int c;
+	lclTocEntry *a = *((lclTocEntry **) av);
+	lclTocEntry *b = *((lclTocEntry **) bv);
+
+	/* NULLs should sort last */
+	c = (b->filename != NULL) - (a->filename != NULL);
+	if (c != 0)
+		return c;
+
+	c = strcmp(a->filename, b->filename);
+	if (c != 0)
+		return c;
+
+	return a->dumpId - b->dumpId;
+}
+
+static bool
+_ShouldAddIndexEntry(ArchiveHandle *AH, lclTocEntry **key)
+{
+	lclTocEntry **sortedToc;
+	lclTocEntry **pprevte;
+	lclTocEntry **key;
+	lclTocEntry *prevte;
+
+	key = 
+
+	sortedToc = ((lclContext *) AH->formatData)->sortedToc;
+	if (!sortedToc)
+		exit_horribly(modulename, "formatData->sortedToc is NULL\n");
+		
+	pte = (lclTocEntry **) bsearch(key, sortedToc,
+								   AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
+
+	if (!pte)
+		exit_horribly(modulename, "binary search failed\n");
+
+	/* If there's no previous entry, always add an index entry */
+	if (pte == sortedToc)
+		return true;
+
+	/*
+	 * If there's a previous entry with the same filename, we don't want to add
+	 * an index entry for this TocEntry.  Note that NULLs sort last so the
+	 * previous entry's filename can never be NULL.
+	 */
+	te = *(pte - 1);
+	return strcmp(te->filename, (*key)->filename) != 0;
+}
+
+/*
+ * Create a list of lclTocEntries sorted by (filename, dumpId).  This list is
+ * used when creating the index file to make sure we don't include a file
+ * multiple times.
+ */
+static void
+_CreateSortedToc(ArchiveHandle *AH)
+{
+	int i;
+	lclContext *ctx;
+	TocEntry *te;
+
+	ctx = (lclContext *) AH->formatData;
+	/* sanity checks */
+	if (!ctx)
+		exit_horribly(modulename, "formatData not allocated\n");
+	if (ctx->sortedToc != NULL)
+		exit_horribly(modulename, "formatData->sortedToc not NULL\n");
+
+	ctx->sortedToc = (lclTocEntry **) pg_malloc0(sizeof(lclTocEntry *) * AH->tocCount);
+	for (i = 0, te = AH->toc->next; te != AH->toc; i++, te = te->next)
+		ctx->sortedToc[i] = (lclTocEntry *) te->formatData;
+
+	qsort(ctx->sortedToc, AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
+}
+
 static void
 _WriteIndexFile(ArchiveHandle *AH)
 {
 	TocEntry *te;
+	FILE *indexFH;
+
+	_CreateSortedToc(AH);
+
+	indexFH = fopen(prependDirectory(AH, "index.sql"), "w");
+	if (!indexFH)
+		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
+
+	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
+	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
+	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
 
 	for (te = AH->toc->next; te != AH->toc; te = te->next)
 	{
@@ -495,7 +586,12 @@ _WriteIndexFile(ArchiveHandle *AH)
 
 		fprintf(fh, "%s\n", te->defn);
 		fclose(fh);
+
+		if (_ShouldAddIndexEntry(AH, te))
+			fprintf(indexFH, "\\i %s\n", tctx->filename);
 	}
+
+	fclose(indexFH);
 }
 
 
