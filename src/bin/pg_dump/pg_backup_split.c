@@ -585,6 +585,8 @@ _WriteIndexFile(ArchiveHandle *AH)
 			exit_horribly(modulename, "could not open file \"%s\": %s\n",
 							filename, strerror(errno));
 
+		if (te->namespace)
+			fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", te->namespace);
 		fprintf(fh, "%s\n", te->defn);
 		fclose(fh);
 
