@@ -900,19 +900,24 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 				if (quoted && *p == '"')
 				{
 					/* if this is an escaped quote inside the quotes, skip it */
-					if (*(p-1) == '"')
+					p--;
+					if (*p == '"')
 					{
-						p -= 2;
+						p--;
 						continue;
 					}
 					else
 					{
-						/* not escaped, we're done */
-						p--;
-						break;
+						quoted = false;
+						continue;
 					}
 				}
-				else if (!quoted && (*p == ',' || *p == '('))
+				else if (!quoted && *p == ',')
+				{
+					p--;
+					break;
+				}
+				else if (!quoted && *p == '(')
 					break;
 				else
 					p--;
