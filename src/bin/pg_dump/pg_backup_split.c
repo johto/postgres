@@ -79,6 +79,7 @@ static void create_schema_directory(ArchiveHandle *AH, const char *tag);
 static void create_directory(ArchiveHandle *AH, const char *fmt, ...)
 	__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 static char *prepend_directory(ArchiveHandle *AH, const char *relativeFilename);
+static char *encode_filename(const char *input);
 static char *get_object_filename(ArchiveHandle *AH, TocEntry *t);
 
 
@@ -642,7 +643,8 @@ prepend_directory(ArchiveHandle *AH, const char *relativeFilename)
  * representing all of them.  That way one can easily compare the outputs of
  * dumps taken on systems with different encoding.
  */
-static char *encode_filename(const char *input)
+static char *
+encode_filename(const char *input)
 {
 	static char buf[MAXPGPATH];
 	const char *p = input;
