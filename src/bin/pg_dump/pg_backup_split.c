@@ -56,8 +56,6 @@ static const char *modulename = gettext_noop("split archiver");
 
 
 /* prototypes for private functions */
-static void _CreateDirectory(const char *fmt, ...) __attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
-static void _CreateSchemaDirectoryStructure(ArchiveHandle *AH, const char *tag);
 static void _ArchiveEntry(ArchiveHandle *AH, TocEntry *te);
 static void _StartData(ArchiveHandle *AH, TocEntry *te);
 static void _EndData(ArchiveHandle *AH, TocEntry *te);
@@ -67,30 +65,22 @@ static int	_ReadByte(ArchiveHandle *);
 static size_t _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len);
 static void _CloseArchive(ArchiveHandle *AH);
 
-static void _WriteIndexFile(ArchiveHandle *AH);
-
 static void _StartBlobs(ArchiveHandle *AH, TocEntry *te);
 static void _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
 
-static char *prependDirectory(ArchiveHandle *AH, const char *relativeFilename);
+static int lclTocEntryCmp(const void *av, const void *bv);
+static bool should_add_index_entry(ArchiveHandle *AH, TocEntry *te);
+static void create_sorted_toc(ArchiveHandle *AH);
+static void add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh);
+static void set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh);
+static void write_split_directory(ArchiveHandle *AH);
 
-
-/* XXX move me */
-static void
-_CreateDirectory(const char *fmt, ...)
-{
-	char directory[MAXPGPATH];
-	va_list ap;
-
-	va_start(ap, fmt);
-	vsnprintf(directory, MAXPGPATH, fmt, ap);
-	if (mkdir(directory, 0700) < 0)
-		exit_horribly(modulename, "could not create directory \"%s\": %s\n",
-					  directory, strerror(errno));
-	va_end(ap);
-}
+static void create_schema_directory(ArchiveHandle *AH, const char *tag);
+static void create_directory(ArchiveHandle *AH, const char *fmt, ...)
+	__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
+static char *prepend_directory(ArchiveHandle *AH, const char *relativeFilename);
 
 
 /*
@@ -151,32 +141,30 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 
 	if (AH->mode == archModeWrite)
 	{
-		_CreateDirectory("%s", ctx->directory);
-		_CreateDirectory("%s/EXTENSIONS", ctx->directory);
+		if (mkdir(ctx->directory, 0700) < 0)
+			exit_horribly(modulename, "could not create directory \"%s\": %s\n",
+						  ctx->directory, strerror(errno));
+
+		create_directory(AH, "EXTENSIONS");
 	}
 	else
         exit_horribly(modulename, "reading a split archive not supported; restore using psql\n");
 }
 
 static void
-_CreateSchemaDirectoryStructure(ArchiveHandle *AH, const char *tag)
+create_schema_directory(ArchiveHandle *AH, const char *tag)
 {
-	lclContext *ctx = (lclContext *) AH->formatData;
-	char	   *dname;
-
-	dname = ctx->directory;
-	
-	_CreateDirectory("%s/%s", dname, tag);
-	_CreateDirectory("%s/%s/FUNCTIONS", dname, tag);
-	_CreateDirectory("%s/%s/TABLES", dname, tag);
-	_CreateDirectory("%s/%s/INDEXES", dname, tag);
-	_CreateDirectory("%s/%s/SEQUENCES", dname, tag);
-	_CreateDirectory("%s/%s/VIEWS", dname, tag);
-	_CreateDirectory("%s/%s/CONSTRAINTS", dname, tag);
-	_CreateDirectory("%s/%s/FK_CONSTRAINTS", dname, tag);
-	_CreateDirectory("%s/%s/TYPES", dname, tag);
-	_CreateDirectory("%s/%s/TRIGGERS", dname, tag);
-	_CreateDirectory("%s/%s/AGGREGATES", dname, tag);
+	create_directory(AH, "%s", tag);
+	create_directory(AH, "%s/FUNCTIONS", tag);
+	create_directory(AH, "%s/TABLES", tag);
+	create_directory(AH, "%s/INDEXES", tag);
+	create_directory(AH, "%s/SEQUENCES", tag);
+	create_directory(AH, "%s/VIEWS", tag);
+	create_directory(AH, "%s/CONSTRAINTS", tag);
+	create_directory(AH, "%s/FK_CONSTRAINTS", tag);
+	create_directory(AH, "%s/TYPES", tag);
+	create_directory(AH, "%s/TRIGGERS", tag);
+	create_directory(AH, "%s/AGGREGATES", tag);
 }
 
 /*
@@ -209,7 +197,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (strcmp(te->desc, "SCHEMA") == 0)
 	{
-		_CreateSchemaDirectoryStructure(AH, te->tag);
+		create_schema_directory(AH, te->tag);
 		tctx->filename = pg_strdup("dbwide.sql");
 		return;
 	}
@@ -341,7 +329,7 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char	   *fname;
 
-	fname = prependDirectory(AH, tctx->filename);
+	fname = prepend_directory(AH, tctx->filename);
 
 	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, AH->compression);
 	if (ctx->dataFH == NULL)
@@ -458,187 +446,8 @@ _CloseArchive(ArchiveHandle *AH)
 	if (AH->mode == archModeWrite)
 	{
 		WriteDataChunks(AH);
-		_WriteIndexFile(AH);
+		write_split_directory(AH);
 	}
-}
-
-
-static int lclTocEntryCmp(const void *av, const void *bv)
-{
-	int c;
-	lclTocEntry *a = *((lclTocEntry **) av);
-	lclTocEntry *b = *((lclTocEntry **) bv);
-
-	/* NULLs should sort last */
-	c = (b->filename != NULL) - (a->filename != NULL);
-	if (c != 0)
-		return c;
-
-	c = strcmp(a->filename, b->filename);
-	if (c != 0)
-		return c;
-
-	return a->dumpId - b->dumpId;
-}
-
-static bool
-_ShouldAddIndexEntry(ArchiveHandle *AH, TocEntry *te)
-{
-	lclTocEntry **sortedToc;
-	lclTocEntry **pte;
-	lclTocEntry **key;
-	lclTocEntry *prevte;
-
-	key = (lclTocEntry **) &te->formatData;
-
-	sortedToc = ((lclContext *) AH->formatData)->sortedToc;
-	if (!sortedToc)
-		exit_horribly(modulename, "formatData->sortedToc is NULL\n");
-		
-	pte = (lclTocEntry **) bsearch(key, sortedToc,
-								   AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
-
-	if (!pte)
-		exit_horribly(modulename, "binary search failed\n");
-
-	/* If there's no previous entry, always add an index entry */
-	if (pte == sortedToc)
-		return true;
-
-	/*
-	 * If there's a previous entry with the same filename, we don't want to add
-	 * an index entry for this TocEntry.  Note that NULLs sort last so the
-	 * previous entry's filename can never be NULL.
-	 */
-	prevte = *(pte - 1);
-	return strcmp(prevte->filename, (*key)->filename) != 0;
-}
-
-/*
- * Create a list of lclTocEntries sorted by (filename, dumpId).  This list is
- * used when creating the index file to make sure we don't include a file
- * multiple times.
- */
-static void
-_CreateSortedToc(ArchiveHandle *AH)
-{
-	int i;
-	lclContext *ctx;
-	TocEntry *te;
-
-	ctx = (lclContext *) AH->formatData;
-	/* sanity checks */
-	if (!ctx)
-		exit_horribly(modulename, "formatData not allocated\n");
-	if (ctx->sortedToc != NULL)
-		exit_horribly(modulename, "formatData->sortedToc not NULL\n");
-
-	ctx->sortedToc = (lclTocEntry **) pg_malloc0(sizeof(lclTocEntry *) * AH->tocCount);
-	for (i = 0, te = AH->toc->next; te != AH->toc; i++, te = te->next)
-		ctx->sortedToc[i] = (lclTocEntry *) te->formatData;
-
-	qsort(ctx->sortedToc, AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
-}
-
-static void
-_SetSearchPath(ArchiveHandle *AH, TocEntry *te, FILE *fh)
-{
-	if (!te->namespace)
-		return;
-
-	/*
-	 * We want to add the namespace to information to each object regardless
-	 * of the previous object's namespace; that way it is easy to see when an
-	 * object is moved to another schema.
-	 */
-	if (strcmp(te->namespace, "pg_catalog") == 0)
-		fprintf(fh, "SET search_path TO pg_catalog;\n\n");
-	else
-		fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", fmtId(te->namespace));
-}
-
-static void
-_AddOwnershipInformation(ArchiveHandle *AH, TocEntry *te, FILE *fh)
-{
-	const char *type = te->desc;
-
-	/* Use ALTER TABLE for views and sequences */
-	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
-		type = "TABLE";
-
-	if (strcmp(type, "FUNCTION") == 0 ||
-		strcmp(type, "TABLE") == 0 ||
-		strcmp(type, "SCHEMA") == 0 ||
-		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
-		strcmp(type, "TYPE") == 0 ||
-		strcmp(type, "AGGREGATE") == 0)
-	{
-		if (te->namespace)
-			fprintf(fh, "ALTER %s %s.%s OWNER TO %s;\n", type, te->namespace, te->tag, te->owner);
-		else
-			fprintf(fh, "ALTER %s %s OWNER TO %s;\n", type, te->tag, te->owner);
-	}
-}
-
-static void
-_WriteIndexFile(ArchiveHandle *AH)
-{
-	TocEntry *te;
-	FILE *indexFH;
-
-	_CreateSortedToc(AH);
-
-	indexFH = fopen(prependDirectory(AH, "index.sql"), "w");
-	if (!indexFH)
-		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
-
-	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
-	fprintf(indexFH, "BEGIN;\n");
-	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
-	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
-
-	for (te = AH->toc->next; te != AH->toc; te = te->next)
-	{
-		FILE *fh;
-		lclTocEntry *tctx;
-		const char *filename;
-
-		tctx = (lclTocEntry *) te->formatData;
-
-		/* skip data */
-		if (te->dataDumper)
-			continue;
-
-		/* we need to skip this entry, see _ArchiveEntry() */
-		if (!tctx->filename)
-			continue;
-
-		/* special case: don't try to re-create the "public" schema */
-		if (strcmp(te->desc, "SCHEMA") == 0 &&
-			strcmp(te->tag, "public") == 0)
-			continue;
-
-		filename = prependDirectory(AH, tctx->filename);
-
-		fh = fopen(filename, "a");
-		if (!fh)
-			exit_horribly(modulename, "could not open file \"%s\": %s\n",
-							filename, strerror(errno));
-
-		_SetSearchPath(AH, te, fh);
-
-		fprintf(fh, "%s\n", te->defn);
-
-		_AddOwnershipInformation(AH, te, fh);
-
-		fclose(fh);
-
-		if (_ShouldAddIndexEntry(AH, te))
-			fprintf(indexFH, "\\i %s\n", tctx->filename);
-	}
-
-	fprintf(indexFH, "COMMIT;\n");
-	fclose(indexFH);
 }
 
 
@@ -659,7 +468,7 @@ _StartBlobs(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char	   *fname;
 
-	fname = prependDirectory(AH, "blobs.toc");
+	fname = prepend_directory(AH, "blobs.toc");
 
 	/* The blob TOC file is never compressed */
 	ctx->blobsTocFH = cfopen_write(fname, "ab", 0);
@@ -725,8 +534,207 @@ _EndBlobs(ArchiveHandle *AH, TocEntry *te)
 }
 
 
+
+static int
+lclTocEntryCmp(const void *av, const void *bv)
+{
+	int c;
+	lclTocEntry *a = *((lclTocEntry **) av);
+	lclTocEntry *b = *((lclTocEntry **) bv);
+
+	/* NULLs should sort last */
+	c = (b->filename != NULL) - (a->filename != NULL);
+	if (c != 0)
+		return c;
+
+	c = strcmp(a->filename, b->filename);
+	if (c != 0)
+		return c;
+
+	return a->dumpId - b->dumpId;
+}
+
+static bool
+should_add_index_entry(ArchiveHandle *AH, TocEntry *te)
+{
+	lclTocEntry **sortedToc;
+	lclTocEntry **pte;
+	lclTocEntry **key;
+	lclTocEntry *prevte;
+
+	key = (lclTocEntry **) &te->formatData;
+
+	sortedToc = ((lclContext *) AH->formatData)->sortedToc;
+	if (!sortedToc)
+		exit_horribly(modulename, "formatData->sortedToc is NULL\n");
+		
+	pte = (lclTocEntry **) bsearch(key, sortedToc,
+								   AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
+
+	if (!pte)
+		exit_horribly(modulename, "binary search failed\n");
+
+	/* If there's no previous entry, always add an index entry */
+	if (pte == sortedToc)
+		return true;
+
+	/*
+	 * If there's a previous entry with the same filename, we don't want to add
+	 * an index entry for this TocEntry.  Note that NULLs sort last so the
+	 * previous entry's filename can never be NULL.
+	 */
+	prevte = *(pte - 1);
+	return strcmp(prevte->filename, (*key)->filename) != 0;
+}
+
+/*
+ * Create a list of lclTocEntries sorted by (filename, dumpId).  This list is
+ * used when creating the index file to make sure we don't include a file
+ * multiple times.
+ */
+static void
+create_sorted_toc(ArchiveHandle *AH)
+{
+	int i;
+	lclContext *ctx;
+	TocEntry *te;
+
+	ctx = (lclContext *) AH->formatData;
+	/* sanity checks */
+	if (!ctx)
+		exit_horribly(modulename, "formatData not allocated\n");
+	if (ctx->sortedToc != NULL)
+		exit_horribly(modulename, "formatData->sortedToc not NULL\n");
+
+	ctx->sortedToc = (lclTocEntry **) pg_malloc0(sizeof(lclTocEntry *) * AH->tocCount);
+	for (i = 0, te = AH->toc->next; te != AH->toc; i++, te = te->next)
+		ctx->sortedToc[i] = (lclTocEntry *) te->formatData;
+
+	qsort(ctx->sortedToc, AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
+}
+
+static void
+add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+{
+	const char *type = te->desc;
+
+	/* Use ALTER TABLE for views and sequences */
+	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
+		type = "TABLE";
+
+	if (strcmp(type, "FUNCTION") == 0 ||
+		strcmp(type, "TABLE") == 0 ||
+		strcmp(type, "SCHEMA") == 0 ||
+		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(type, "TYPE") == 0 ||
+		strcmp(type, "AGGREGATE") == 0)
+	{
+		if (te->namespace)
+			fprintf(fh, "ALTER %s %s.%s OWNER TO %s;\n", type, te->namespace, te->tag, te->owner);
+		else
+			fprintf(fh, "ALTER %s %s OWNER TO %s;\n", type, te->tag, te->owner);
+	}
+}
+
+static void
+set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+{
+	if (!te->namespace)
+		return;
+
+	/*
+	 * We want to add the namespace to information to each object regardless
+	 * of the previous object's namespace; that way it is easy to see when an
+	 * object is moved to another schema.
+	 */
+	if (strcmp(te->namespace, "pg_catalog") == 0)
+		fprintf(fh, "SET search_path TO pg_catalog;\n\n");
+	else
+		fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", fmtId(te->namespace));
+}
+
+static void
+write_split_directory(ArchiveHandle *AH)
+{
+	TocEntry *te;
+	FILE *indexFH;
+
+	create_sorted_toc(AH);
+
+	indexFH = fopen(prepend_directory(AH, "index.sql"), "w");
+	if (!indexFH)
+		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
+
+	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
+	fprintf(indexFH, "BEGIN;\n");
+	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
+	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
+
+	for (te = AH->toc->next; te != AH->toc; te = te->next)
+	{
+		FILE *fh;
+		lclTocEntry *tctx;
+		const char *filename;
+
+		tctx = (lclTocEntry *) te->formatData;
+
+		/* skip data */
+		if (te->dataDumper)
+			continue;
+
+		/* we need to skip this entry, see _ArchiveEntry() */
+		if (!tctx->filename)
+			continue;
+
+		/* special case: don't try to re-create the "public" schema */
+		if (strcmp(te->desc, "SCHEMA") == 0 &&
+			strcmp(te->tag, "public") == 0)
+			continue;
+
+		filename = prepend_directory(AH, tctx->filename);
+
+		fh = fopen(filename, "a");
+		if (!fh)
+			exit_horribly(modulename, "could not open file \"%s\": %s\n",
+							filename, strerror(errno));
+
+		set_search_path(AH, te, fh);
+
+		fprintf(fh, "%s\n", te->defn);
+
+		add_ownership_information(AH, te, fh);
+
+		fclose(fh);
+
+		if (should_add_index_entry(AH, te))
+			fprintf(indexFH, "\\i %s\n", tctx->filename);
+	}
+
+	fprintf(indexFH, "COMMIT;\n");
+	fclose(indexFH);
+}
+
+
+static void
+create_directory(ArchiveHandle *AH, const char *fmt, ...)
+{
+	va_list ap;
+	char reldir[MAXPGPATH];
+	char *directory;
+
+	va_start(ap, fmt);
+	vsnprintf(reldir, MAXPGPATH, fmt, ap);
+	va_end(ap);
+
+	directory = prepend_directory(AH, reldir);
+	if (mkdir(directory, 0700) < 0)
+		exit_horribly(modulename, "could not create directory \"%s\": %s\n",
+					  directory, strerror(errno));
+}
+
+
 static char *
-prependDirectory(ArchiveHandle *AH, const char *relativeFilename)
+prepend_directory(ArchiveHandle *AH, const char *relativeFilename)
 {
 	lclContext *ctx = (lclContext *) AH->formatData;
 	static char buf[MAXPGPATH];
