@@ -71,6 +71,7 @@ static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
 static int lclTocEntryCmp(const void *av, const void *bv);
 static bool should_add_index_entry(ArchiveHandle *AH, TocEntry *te);
 static void create_sorted_toc(ArchiveHandle *AH);
+static void get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh);
 static void add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh);
 static void set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh);
 static void write_split_directory(ArchiveHandle *AH);
@@ -414,6 +415,7 @@ _EndBlobs(ArchiveHandle *AH, TocEntry *te)
 }
 
 
+
 static int
 lclTocEntryCmp(const void *av, const void *bv)
 {
@@ -493,7 +495,7 @@ create_sorted_toc(ArchiveHandle *AH)
 }
 
 static void
-add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 {
 	const char *type = te->desc;
 
@@ -501,18 +503,78 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
 		type = "TABLE";
 
-	if (strcmp(type, "FUNCTION") == 0 ||
+	/* LARGE OBJECT for BLOBs */
+	if (strcmp(type, "BLOB") == 0)
+		type = "LARGE OBJECT";
+
+
+	if (strcmp(type, "COLLATION") == 0 ||
+		strcmp(type, "CONVERSION") == 0 ||
+		strcmp(type, "DOMAIN") == 0 ||
+		strcmp(type, "DATABASE") == 0 ||
+		strcmp(type, "FOREIGN DATA WRAPPER") == 0 ||
+		strcmp(type, "FOREIGN TABLE") == 0 ||
 		strcmp(type, "TABLE") == 0 ||
-		strcmp(type, "SCHEMA") == 0 ||
-		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(type, "TEXT SEARCH CONFIGURATION") == 0 ||
+		strcmp(type, "TEXT SEARCH DICTIONARY") == 0 ||
 		strcmp(type, "TYPE") == 0 ||
-		strcmp(type, "AGGREGATE") == 0)
+		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(type, "SCHEMA") == 0 ||
+		strcmp(type, "SERVER") == 0 ||
+		strcmp(type, "USER MAPPING") == 0)
 	{
+		fprintf(fh, "%s ", type);
 		if (te->namespace)
-			fprintf(fh, "ALTER %s %s.%s OWNER TO %s;\n", type, te->namespace, te->tag, te->owner);
-		else
-			fprintf(fh, "ALTER %s %s OWNER TO %s;\n", type, te->tag, te->owner);
+			fprintf(fh, "%s.", fmtId(te->namespace));
+		fprintf(fh, "%s ", fmtId(te->tag));
+
+		return;
 	}
+
+	 /*
+	  * These object types require additional decoration.  Fortunately, the
+	  * information needed is exactly what's in the DROP command.
+	  */
+	if (strcmp(type, "AGGREGATE") == 0 ||
+		strcmp(type, "FUNCTION") == 0 ||
+		strcmp(type, "OPERATOR") == 0 ||
+		strcmp(type, "OPERATOR CLASS") == 0 ||
+		strcmp(type, "OPERATOR FAMILY") == 0)
+	{
+		/* Chop "DROP " off the front and make a modifyable copy */
+		char *first = pg_strdup(te->dropStmt + 5);
+		char *last;
+
+		/* strip off any ';' or '\n' at the end */
+		last = first + strlen(first) - 1;
+		while (last >= first && (*last == '\n' || *last == ';'))
+			last--;
+		*(last + 1) = '\0';		
+
+		fprintf(fh, "%s ", first);
+
+		free(first);
+
+		return;
+	}
+
+	exit_horribly(modulename, "don't know how to set owner for object type %s\n", type);
+}
+
+static void
+add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+{
+	/* skip objects that don't have an owner */
+	if (strcmp(te->desc, "ACL") == 0 ||
+		strcmp(te->desc, "COMMENT") == 0 ||
+		strcmp(te->desc, "ENCODING") == 0 ||
+		strcmp(te->desc, "EXTENSION") == 0 ||
+		strcmp(te->desc, "STDSTRINGS") == 0)
+		return;
+
+	fprintf(fh, "ALTER ");
+	get_object_description(AH, te, fh);
+	fprintf(fh, "OWNER TO %s;\n\n", fmtId(te->owner));
 }
 
 static void
@@ -547,6 +609,7 @@ write_split_directory(ArchiveHandle *AH)
 	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
 	fprintf(indexFH, "BEGIN;\n");
 	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
+	fprintf(indexFH, "SET client_encoding TO '%s';\n", pg_encoding_to_char(AH->public.encoding));
 	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
 
 	for (te = AH->toc->next; te != AH->toc; te = te->next)
