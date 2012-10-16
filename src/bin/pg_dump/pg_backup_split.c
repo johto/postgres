@@ -567,8 +567,10 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
 		strcmp(te->desc, "COMMENT") == 0 ||
+		strcmp(te->desc, "DEFAULT") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "EXTENSION") == 0 ||
+		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
 		strcmp(te->desc, "STDSTRINGS") == 0)
 		return;
 
