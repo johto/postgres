@@ -2,8 +2,6 @@
  *
  * pg_backup_split.c
  *
- * XXX updateme
- *
  *	A directory format dump is a directory, which contains a "toc.dat" file
  *	for the TOC, and a separate file for each data entry, named "<oid>.dat".
  *	Large objects (BLOBs) are stored in separate files named "blob_<uid>.dat",
@@ -81,6 +79,7 @@ static void create_schema_directory(ArchiveHandle *AH, const char *tag);
 static void create_directory(ArchiveHandle *AH, const char *fmt, ...)
 	__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 static char *prepend_directory(ArchiveHandle *AH, const char *relativeFilename);
+static char *get_object_filename(ArchiveHandle *AH, TocEntry *t);
 
 
 /*
@@ -189,127 +188,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 		return;
 	}
 
-	if (strcmp(te->desc, "BLOBS") == 0)
-	{
-		tctx->filename = pg_strdup("blobs.toc");
-		return;
-	}
-
-	if (strcmp(te->desc, "SCHEMA") == 0)
-	{
-		create_schema_directory(AH, te->tag);
-		tctx->filename = pg_strdup("dbwide.sql");
-		return;
-	}
-	
-	if (strcmp(te->desc, "ENCODING") == 0 ||
-		strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
-		strcmp(te->desc, "STDSTRINGS") == 0)
-	{
-		tctx->filename = pg_strdup("dbwide.sql");
-		return;
-	}
-
-	if (strcmp(te->desc, "DEFAULT") == 0)
-	{
-		tctx->filename = pg_strdup("postdata.sql");
-		return;
-	}
-
-	if (strcmp(te->desc, "DATABASE") == 0)
-	{
-		/* not needed */
-		tctx->filename = NULL;
-		return;
-	}
-
-	if (strcmp(te->desc, "TABLE") == 0 || strcmp(te->desc, "SEQUENCE") == 0 ||
-		strcmp(te->desc, "VIEW") == 0 || strcmp(te->desc, "CONSTRAINT") == 0 ||
-		strcmp(te->desc, "TYPE") == 0 || strcmp(te->desc, "TRIGGER") == 0 ||
-		strcmp(te->desc, "AGGREGATE") == 0)
-	{
-		snprintf(fn, MAXPGPATH, "%s/%sS/%s.sql", te->namespace, te->desc, te->tag);
-		tctx->filename = pg_strdup(fn);
-		return;
-	}
-
-	if (strcmp(te->desc, "FK CONSTRAINT") == 0)
-	{
-		snprintf(fn, MAXPGPATH, "%s/FK_CONSTRAINTS/%s.sql", te->namespace, te->tag);
-		tctx->filename = pg_strdup(fn);
-		return;
-	}
-
-	if (strcmp(te->desc, "INDEX") == 0)
-	{
-		/* XXX if we ever want indexes to be dumped into the table file, we need to
-		 * parse the actual definition. ugly :-( */
-		snprintf(fn, MAXPGPATH, "%s/INDEXES/%s.sql", te->namespace, te->tag);
-		tctx->filename = pg_strdup(fn);
-		return;
-	}
-
-	if (strcmp(te->desc, "EXTENSION") == 0)
-	{
-		snprintf(fn, MAXPGPATH, "EXTENSIONS/%s.sql", te->tag);
-		tctx->filename = pg_strdup(fn);
-		return;
-	}
-		
-	if (strcmp(te->desc, "ACL") == 0 ||
-		strcmp(te->desc, "SEQUENCE SET") == 0 ||
-		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
-		strcmp(te->desc, "COMMENT") == 0)
-	{
-		TocEntry *depte;
-		DumpId depId;
-
-		if (te->nDeps != 1)
-			exit_horribly(modulename, "unexpected number of dependencies (%d) for \"%s\" %d\n", te->nDeps, te->desc, te->dumpId);
-
-		depId = *te->dependencies;
-		for (depte = te->prev; depte != te; depte = depte->prev)
-		{
-			if (depte->dumpId == depId)
-			{
-				const char *depfilename;
-				lclTocEntry *depentry = (lclTocEntry *) depte->formatData;
-
-				if (!depentry)
-					depfilename = NULL;
-				else
-					depfilename = depentry->filename;
-
-				if (!depfilename)
-					tctx->filename = NULL;
-				else
-					tctx->filename = pg_strdup(depfilename);
-
-				return;
-			}
-		}
-
-		exit_horribly(modulename, "could not find dependency %d for \"%s\" %d\n", depId, te->desc, te->dumpId);
-	}
-	
-	if (strcmp(te->desc, "FUNCTION") == 0)
-	{
-		char *proname;
-		char *proArgPos;
-	
-		/* XXX fix this later */
-		proArgPos = strstr(te->tag, "(");
-		if (!proArgPos)
-			exit_horribly(modulename, "shouldn't happen I think\n");
-		proname = strndup(te->tag, proArgPos - te->tag);
-
-		snprintf(fn, MAXPGPATH, "%s/FUNCTIONS/%s.sql", te->namespace, proname);
-		tctx->filename = pg_strdup(fn);
-
-		return;
-	}
-
-	exit_horribly(modulename, "unknown object \"%s\"\n", te->desc);
+	tctx->filename = get_object_filename(AH, te);
 }
 
 
@@ -534,7 +413,6 @@ _EndBlobs(ArchiveHandle *AH, TocEntry *te)
 }
 
 
-
 static int
 lclTocEntryCmp(const void *av, const void *bv)
 {
@@ -750,4 +628,173 @@ prepend_directory(ArchiveHandle *AH, const char *relativeFilename)
 	strcat(buf, relativeFilename);
 
 	return buf;
+}
+
+
+/*
+ * Encode a filename to fit in the "Portable Filename Character Set" in POSIX.
+ *
+ * Any character not part of that set will be replaced with '_'.  Also, because
+ * some file system are case insensitive, we need to lower-case all file names.
+ */
+static char *encode_filename(const char *input)
+{
+	static char buf[MAXPGPATH];
+	const char *p = input;
+	char *op = buf;
+
+	/*
+	 * The input filename should be at most 64 bytes (because it comes from the
+	 * "name" datatype, so this should never happen.
+	 */
+	if (strlen(input) >= MAXPGPATH)
+		exit_horribly(modulename, "file name too long: \"%s\"\n", input);
+
+	for (;;)
+	{
+		if (*p == 0)
+			break;
+
+		if (*p >= 'A' && *p <= 'Z')
+			*op = tolower(*p);
+		else if ((*p >= 'a' && *p <= 'z') ||
+				 (*p >= '0' && *p <= '9') ||
+				 *p == '.' || *p == '_' || *p == '-')
+			*op = *p;
+		else
+			*op = '_';
+
+		op++;
+		p++;
+	}
+
+	*op = '\0';
+
+	return buf;
+}
+
+static char *
+get_object_filename(ArchiveHandle *AH, TocEntry *te)
+{
+	int i;
+	char path[MAXPGPATH];
+
+	/*
+	 * List of object types we can simply dump into  [schema/]OBJTYPE/tag.sql.
+	 * The first argument is the object type (te->desc) and the second one is
+	 * the subdirectory to dump to.
+	 */
+	const char * const object_types[][2] =
+	{
+		{ "AGGREGATE",		"AGGREGATES"		},
+		{ "CONSTRAINT",		"CONSTRAINT"		},
+		{ "EXTENSION",		"EXTENSIONS"		},
+		{ "FK CONSTRAINT",	"FK_CONSTRAINTS"	},
+		{ "INDEX",			"INDEXES"			},
+		{ "SEQUENCE",		"SEQUENCES"			},
+		{ "TABLE",			"TABLES"			},
+		{ "TYPE",			"TYPES"				},
+		{ "TRIGGER",		"TRIGGERS"			},
+		{ "VIEW",			"VIEWS"				}
+	};
+
+	/*
+	 * There's no need to create a database; one should always exist when
+	 * restoring.
+	 */
+	if (strcmp(te->desc, "DATABASE") == 0)
+		return NULL;
+
+	/* for schemas, create the directory */
+	if (strcmp(te->desc, "SCHEMA") == 0)
+		create_schema_directory(AH, te->tag);
+
+	if (strcmp(te->desc, "BLOBS") == 0)
+		return pg_strdup("blobs.toc");
+
+	if (strcmp(te->desc, "SCHEMA") == 0 ||
+		strcmp(te->desc, "ENCODING") == 0 ||
+		strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(te->desc, "STDSTRINGS") == 0)
+		return pg_strdup("dbwide.sql");
+
+	/*
+	 * We unfortunately don't know which tables the DEFAULT values go to, so we
+	 * just add them in after the data has been restored.  It would be nice to
+	 * fix this at some point..
+	 */
+	if (strcmp(te->desc, "DEFAULT") == 0)
+		return pg_strdup("postdata.sql");
+
+	/*
+	 * These objects should always contain dependency information.  Find the
+	 * object we depend  te  depends on, and dump them to the same file.
+	 */
+	if (strcmp(te->desc, "ACL") == 0 ||
+		strcmp(te->desc, "SEQUENCE SET") == 0 ||
+		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
+		strcmp(te->desc, "COMMENT") == 0)
+	{
+		TocEntry *depte;
+		DumpId depId;
+
+		if (te->nDeps != 1)
+			exit_horribly(modulename, "unexpected number of dependencies (%d) for \"%s\" %d\n", te->nDeps, te->desc, te->dumpId);
+
+		depId = *te->dependencies;
+		for (depte = te->prev; depte != te; depte = depte->prev)
+		{
+			if (depte->dumpId == depId)
+			{
+				lclTocEntry *depentry = (lclTocEntry *) depte->formatData;
+
+				/* XXX should this happen? */
+				if (!depentry)
+					return NULL;
+				
+				/*
+				 * No need to strdup since depentry's filename is either NULL or an
+				 * strdup()'d string.
+				 */
+				return depentry->filename;
+			}
+		}
+
+		exit_horribly(modulename, "could not find dependency %d for \"%s\" %d\n", depId, te->desc, te->dumpId);
+	}
+
+	if (strcmp(te->desc, "FUNCTION") == 0)
+	{
+		char *proname;
+		char *proArgPos;
+	
+		/* XXX fix this later */
+		proArgPos = strstr(te->tag, "(");
+		if (!proArgPos)
+			exit_horribly(modulename, "shouldn't happen I think\n");
+		proname = strndup(te->tag, proArgPos - te->tag);
+
+		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", te->namespace, encode_filename(proname));
+		return pg_strdup(path);
+	}
+
+	/* finally, see if it's any of the objects that require no special treatment */
+	for (i = 0; i < sizeof(object_types) / sizeof(object_types[0]); ++i)
+	{
+		if (strcmp(object_types[i][0], te->desc) == 0)
+		{
+			const char *objsubdir = object_types[i][1];
+
+			if (te->namespace)
+				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", te->namespace,
+						 objsubdir, encode_filename(te->tag));
+			else
+				snprintf(path, MAXPGPATH, "%s/%s.sql",
+						 objsubdir, encode_filename(te->tag));
+
+			return pg_strdup(path);
+		}
+	}
+
+	exit_horribly(modulename, "unknown object type \"%s\"\n", te->desc);
 }
