@@ -636,12 +636,18 @@ prepend_directory(ArchiveHandle *AH, const char *relativeFilename)
  *
  * Any character not part of that set will be replaced with '_'.  Also, because
  * some file system are case insensitive, we need to lower-case all file names.
+ *
+ * Because we don't know what encoding the data is in, if we see multiple
+ * consecutive octets outside the set, we only output one underscore
+ * representing all of them.  That way one can easily compare the outputs of
+ * dumps taken on systems with different encoding.
  */
 static char *encode_filename(const char *input)
 {
 	static char buf[MAXPGPATH];
 	const char *p = input;
 	char *op = buf;
+	bool replaced_previous;
 
 	/*
 	 * The input filename should be at most 64 bytes (because it comes from the
@@ -650,21 +656,29 @@ static char *encode_filename(const char *input)
 	if (strlen(input) >= MAXPGPATH)
 		exit_horribly(modulename, "file name too long: \"%s\"\n", input);
 
-	for (;;)
+	for (replaced_previous = false;;)
 	{
 		if (*p == 0)
 			break;
 
 		if (*p >= 'A' && *p <= 'Z')
-			*op = tolower(*p);
+		{
+			*op++ = tolower(*p);
+			replaced_previous = false;
+		}
 		else if ((*p >= 'a' && *p <= 'z') ||
 				 (*p >= '0' && *p <= '9') ||
 				 *p == '.' || *p == '_' || *p == '-')
-			*op = *p;
-		else
-			*op = '_';
+		{
+			*op++ = *p;
+			replaced_previous = false;
+		}
+		else if (!replaced_previous)
+		{
+			*op++ = '_';
+			replaced_previous = true;
+		}
 
-		op++;
 		p++;
 	}
 
