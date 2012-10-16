@@ -514,6 +514,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(type, "DATABASE") == 0 ||
 		strcmp(type, "FOREIGN DATA WRAPPER") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
+		strcmp(type, "INDEX") == 0 ||
 		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "TEXT SEARCH CONFIGURATION") == 0 ||
 		strcmp(type, "TEXT SEARCH DICTIONARY") == 0 ||
@@ -567,11 +568,14 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
 		strcmp(te->desc, "COMMENT") == 0 ||
+		strcmp(te->desc, "CONSTRAINT") == 0 ||
 		strcmp(te->desc, "DEFAULT") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "EXTENSION") == 0 ||
+		strcmp(te->desc, "FK CONSTRAINT") == 0 ||
 		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
-		strcmp(te->desc, "STDSTRINGS") == 0)
+		strcmp(te->desc, "STDSTRINGS") == 0 ||
+		strcmp(te->desc, "TRIGGER") == 0)
 		return;
 
 	fprintf(fh, "ALTER ");
@@ -768,7 +772,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	const char * const object_types[][2] =
 	{
 		{ "AGGREGATE",		"AGGREGATES"		},
-		{ "CONSTRAINT",		"CONSTRAINT"		},
+		{ "CONSTRAINT",		"CONSTRAINTS"		},
 		{ "EXTENSION",		"EXTENSIONS"		},
 		{ "FK CONSTRAINT",	"FK_CONSTRAINTS"	},
 		{ "INDEX",			"INDEXES"			},
