@@ -851,15 +851,76 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	if (strcmp(te->desc, "FUNCTION") == 0)
 	{
 		char *proname;
-		char *proArgPos;
-	
-		/* XXX fix this later */
-		proArgPos = strstr(te->tag, "(");
-		if (!proArgPos)
-			exit_horribly(modulename, "shouldn't happen I think\n");
-		proname = strndup(te->tag, proArgPos - te->tag);
+		char *p;
+		bool quoted;
+
+		/*
+		 * Parse the actual function name from the tag.  This is a bit tricky since
+		 * the argument type names could contain any non-null character inside double
+		 * quotes.
+		 *
+		 * Start parsing from the end of the tag; starting from the beginning would be
+		 * almost impossible since the function name doesn't have the quotes; we
+		 * wouldn't know where the name ends and the argument list starts.
+		 */
+		proname = pg_strdup(te->tag);
+		p = proname + strlen(proname) - 1;
+		if (*p-- != ')')
+			exit_horribly(modulename, "could not parse function tag \"%s\"\n", te->tag);
+
+		/* loop through the argument list */
+		for (;;)
+		{
+			/* are we done? */
+			if (*p == '(')
+			{
+				*p = '\0';
+				break;
+			}
+
+			/* 
+			 * Ok, we're not done so we must be at the end of a type name.  See if it's
+			 * quoted.
+			 */
+			quoted = (*p == '"');
+
+			/* skip the quote or the last character of the type name */
+			p--;
+
+			/* loop until we've skipped through the entire type name */
+			for (;;)
+			{
+				/*
+				 * There should always be at least two characters available.  Check that
+				 * here so we can slightly simplify the logic below.
+				 */
+				if (p <= proname + 2)
+					exit_horribly(modulename, "could not parse function tag \"%s\"\n", te->tag);
+
+				if (quoted && *p == '"')
+				{
+					/* if this is an escaped quote inside the quotes, skip it */
+					if (*(p-1) == '"')
+					{
+						p -= 2;
+						continue;
+					}
+					else
+					{
+						/* not escaped, we're done */
+						p--;
+						break;
+					}
+				}
+				else if (!quoted && (*p == ',' || *p == '('))
+					break;
+				else
+					p--;
+			}
+		}
 
 		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", te->namespace, encode_filename(proname));
+		free(proname);
 		return pg_strdup(path);
 	}
 
