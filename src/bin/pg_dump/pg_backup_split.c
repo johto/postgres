@@ -911,9 +911,8 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 			{
 				lclTocEntry *depentry = (lclTocEntry *) depte->formatData;
 
-				/* XXX should this happen? */
 				if (!depentry)
-					return NULL;
+					exit_horribly(modulename, "unexpected NULL depentry");
 				
 				/*
 				 * No need to strdup since depentry's filename is either NULL or an
