@@ -430,9 +430,13 @@ lclTocEntryCmp(const void *av, const void *bv)
 	if (c != 0)
 		return c;
 
-	c = strcmp(a->filename, b->filename);
-	if (c != 0)
-		return c;
+	/* don't call strcmp() on NULLs */
+	if (a->filename != NULL && b->filename != NULL)
+	{
+		c = strcmp(a->filename, b->filename);
+		if (c != 0)
+			return c;
+	}
 
 	return a->dumpId - b->dumpId;
 }
