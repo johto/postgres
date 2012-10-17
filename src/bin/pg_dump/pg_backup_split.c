@@ -980,8 +980,12 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 			const char *objsubdir = object_types[i][1];
 
 			if (te->namespace)
-				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", encode_filename(te->namespace),
+			{
+				char *namespace = pg_strdup(encode_filename(te->namespace));
+				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", namespace,
 						 objsubdir, encode_filename(te->tag));
+				free(namespace);
+			}
 			else
 				snprintf(path, MAXPGPATH, "%s/%s.sql",
 						 objsubdir, encode_filename(te->tag));
