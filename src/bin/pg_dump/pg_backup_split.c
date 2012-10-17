@@ -915,11 +915,11 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		 * almost impossible since the function name doesn't have the quotes; we
 		 * wouldn't know where the name ends and the argument list starts.
 		 */
-		buf = pg_strdup(te->dropStmt);
-		if (strncmp(buf, "DROP FUNCTION ", 14) != 0)
+		if (strncmp(te->dropStmt, "DROP FUNCTION ", 14) != 0)
 			exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
 
-		proname = buf + 14;
+		buf = pg_strdup(te->dropStmt + 14);
+		proname = buf;
 
 		p = skip_identifier(proname);
 		if (!p)
