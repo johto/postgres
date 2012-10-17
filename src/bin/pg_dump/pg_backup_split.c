@@ -634,7 +634,15 @@ write_split_directory(ArchiveHandle *AH)
 		if (!tctx->filename)
 			continue;
 
-		/* special case: don't try to re-create the "public" schema */
+		/* add an index entry if necessary */
+		if (should_add_index_entry(AH, te))
+			fprintf(indexFH, "\\i %s\n", tctx->filename);
+
+		/* 
+		 * Special case: don't try to re-create the "public" schema.  Note that we
+		 * still need to create the index entry because all schemas use the same
+		 * "dbwide.sql" file, so make sure this happens *after* that.
+		 */
 		if (strcmp(te->desc, "SCHEMA") == 0 &&
 			strcmp(te->tag, "public") == 0)
 			continue;
@@ -653,9 +661,6 @@ write_split_directory(ArchiveHandle *AH)
 		add_ownership_information(AH, te, fh);
 
 		fclose(fh);
-
-		if (should_add_index_entry(AH, te))
-			fprintf(indexFH, "\\i %s\n", tctx->filename);
 	}
 
 	fprintf(indexFH, "COMMIT;\n");
