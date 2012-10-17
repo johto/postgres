@@ -155,17 +155,19 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 static void
 create_schema_directory(ArchiveHandle *AH, const char *tag)
 {
-	create_directory(AH, "%s", tag);
-	create_directory(AH, "%s/FUNCTIONS", tag);
-	create_directory(AH, "%s/TABLES", tag);
-	create_directory(AH, "%s/INDEXES", tag);
-	create_directory(AH, "%s/SEQUENCES", tag);
-	create_directory(AH, "%s/VIEWS", tag);
-	create_directory(AH, "%s/CONSTRAINTS", tag);
-	create_directory(AH, "%s/FK_CONSTRAINTS", tag);
-	create_directory(AH, "%s/TYPES", tag);
-	create_directory(AH, "%s/TRIGGERS", tag);
-	create_directory(AH, "%s/AGGREGATES", tag);
+	char *namespace = encode_filename(tag);
+
+	create_directory(AH, "%s", namespace);
+	create_directory(AH, "%s/FUNCTIONS", namespace);
+	create_directory(AH, "%s/TABLES", namespace);
+	create_directory(AH, "%s/INDEXES", namespace);
+	create_directory(AH, "%s/SEQUENCES", namespace);
+	create_directory(AH, "%s/VIEWS", namespace);
+	create_directory(AH, "%s/CONSTRAINTS", namespace);
+	create_directory(AH, "%s/FK_CONSTRAINTS", namespace);
+	create_directory(AH, "%s/TYPES", namespace);
+	create_directory(AH, "%s/TRIGGERS", namespace);
+	create_directory(AH, "%s/AGGREGATES", namespace);
 }
 
 /*
@@ -185,7 +187,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (te->dataDumper)
 	{
-		snprintf(fn, MAXPGPATH, "%s/TABLES/%d.dat", te->namespace, te->dumpId);
+		snprintf(fn, MAXPGPATH, "%s/TABLES/%d.dat", encode_filename(te->namespace), te->dumpId);
 		tctx->filename = pg_strdup(fn);
 		return;
 	}
@@ -597,7 +599,7 @@ set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	if (strcmp(te->namespace, "pg_catalog") == 0)
 		fprintf(fh, "SET search_path TO pg_catalog;\n\n");
 	else
-		fprintf(fh, "SET search_path TO %s, pg_catalog;\n\n", fmtId(te->namespace));
+		fprintf(fh, "SET search_path TO '%s', pg_catalog;\n\n", te->namespace);
 }
 
 static void
@@ -910,6 +912,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		char *buf;
 		char *proname;
 		char *p;
+		char *namespace;
 
 		/*
 		 * Parse the actual function name from the tag.  This is a bit tricky since
@@ -958,8 +961,14 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		else
 			*p = '\0';
 
-		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", te->namespace, encode_filename(proname));
+		/*
+		 * UGH.  this is ugly.  encode_filename() returns a pointer to a static
+		 * buffer so we need to strdup() it.
+		 */
+		namespace = pg_strdup(encode_filename(te->namespace));
+		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", namespace, encode_filename(proname));
 		free(buf);
+		free(namespace);
 		return pg_strdup(path);
 	}
 
@@ -971,7 +980,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 			const char *objsubdir = object_types[i][1];
 
 			if (te->namespace)
-				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", te->namespace,
+				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", encode_filename(te->namespace),
 						 objsubdir, encode_filename(te->tag));
 			else
 				snprintf(path, MAXPGPATH, "%s/%s.sql",
