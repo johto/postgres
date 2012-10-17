@@ -168,6 +168,8 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/TYPES", namespace);
 	create_directory(AH, "%s/TRIGGERS", namespace);
 	create_directory(AH, "%s/AGGREGATES", namespace);
+	create_directory(AH, "%s/OPERATOR_CLASSES", namespace);
+	create_directory(AH, "%s/OPERATOR_FAMILIES", namespace);
 }
 
 /*
@@ -834,16 +836,18 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	 */
 	const char * const object_types[][2] =
 	{
-		{ "AGGREGATE",		"AGGREGATES"		},
-		{ "CONSTRAINT",		"CONSTRAINTS"		},
-		{ "EXTENSION",		"EXTENSIONS"		},
-		{ "FK CONSTRAINT",	"FK_CONSTRAINTS"	},
-		{ "INDEX",			"INDEXES"			},
-		{ "SEQUENCE",		"SEQUENCES"			},
-		{ "TABLE",			"TABLES"			},
-		{ "TYPE",			"TYPES"				},
-		{ "TRIGGER",		"TRIGGERS"			},
-		{ "VIEW",			"VIEWS"				}
+		{ "AGGREGATE",			"AGGREGATES"		},
+		{ "CONSTRAINT",			"CONSTRAINTS"		},
+		{ "EXTENSION",			"EXTENSIONS"		},
+		{ "FK CONSTRAINT",		"FK_CONSTRAINTS"	},
+		{ "INDEX",				"INDEXES"			},
+		{ "SEQUENCE",			"SEQUENCES"			},
+		{ "OPERATOR CLASS",		"OPERATOR_CLASSES"	},
+		{ "OPERATOR FAMILY",	"OPERATOR_FAMILIES"	},
+		{ "TABLE",				"TABLES"			},
+		{ "TYPE",				"TYPES"				},
+		{ "TRIGGER",			"TRIGGERS"			},
+		{ "VIEW",				"VIEWS"				}
 	};
 
 	/*
@@ -873,6 +877,17 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	 */
 	if (strcmp(te->desc, "DEFAULT") == 0)
 		return pg_strdup("postdata.sql");
+
+	if (strcmp(te->desc, "OPERATOR") == 0)
+	{
+		if (te->namespace)
+		{
+			snprintf(path, MAXPGPATH, "%s/operators.sql", encode_filename(te->namespace));
+			return pg_strdup(path);
+		}
+		else
+			return pg_strdup("operators.sql");
+	}
 
 	/*
 	 * These objects should always contain dependency information.  Find the
@@ -911,7 +926,8 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		exit_horribly(modulename, "could not find dependency %d for \"%s\" %d\n", depId, te->desc, te->dumpId);
 	}
 
-	if (strcmp(te->desc, "FUNCTION") == 0)
+	if (strcmp(te->desc, "AGGREGATE") == 0 ||
+		strcmp(te->desc, "FUNCTION") == 0)
 	{
 		char *buf;
 		char *proname;
@@ -919,18 +935,17 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		char *namespace;
 
 		/*
-		 * Parse the actual function name from the tag.  This is a bit tricky since
-		 * the argument type names could contain any non-null character inside double
-		 * quotes.
-		 *
-		 * Start parsing from the end of the tag; starting from the beginning would be
-		 * almost impossible since the function name doesn't have the quotes; we
-		 * wouldn't know where the name ends and the argument list starts.
+		 * Parse the actual function/aggregate name from the DROP statement.  This is
+		 * easier than parsing it from the tag since the object name is never quoted
+		 * inside the tag so we can't reliably tell where the argument list begins.
 		 */
-		if (strncmp(te->dropStmt, "DROP FUNCTION ", 14) != 0)
+		if (strncmp(te->dropStmt, "DROP FUNCTION ", 14) == 0)
+			buf = pg_strdup(te->dropStmt + 14);
+		else if (strncmp(te->dropStmt, "DROP AGGREGATE ", 15) == 0)
+			buf = pg_strdup(te->dropStmt + 15);
+		else
 			exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
 
-		buf = pg_strdup(te->dropStmt + 14);
 		proname = buf;
 
 		p = skip_identifier(proname);
@@ -970,7 +985,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		 * buffer so we need to strdup() it.
 		 */
 		namespace = pg_strdup(encode_filename(te->namespace));
-		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", namespace, encode_filename(proname));
+		snprintf(path, MAXPGPATH, "%s/%sS/%s.sql", namespace, te->desc, encode_filename(proname));
 		free(buf);
 		free(namespace);
 		return pg_strdup(path);
