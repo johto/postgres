@@ -758,6 +758,58 @@ encode_filename(const char *input)
 	return buf;
 }
 
+/*
+ * Given a pointer to the start of an identifier, returns a pointer to one
+ * character past that identifier, or NULL if no valid identifier was found.
+ * Also we don't remove any escaped quotes inside quoted identifiers, so the
+ * caller should be prepared to deal with that.  In the (currently) only use of
+ * this function it won't matter, since double quotes will be replaced with a
+ * single underscore when encoding the filename.
+ */
+static char *
+skip_identifier(char *buf)
+{
+	char *p = buf;
+	bool quoted = false;
+
+	if (*p == '"')
+		quoted = true;
+	/* without quotes, the first character needs special treatment */
+	else if (!((*p >= 'a' && *p <= 'z') || *p == '_'))
+		return NULL;
+	p++;
+
+	for (;;)
+	{
+		/*
+		 * If we're parsing a quoted identifier, stop at a quote unless it's escaped.
+		 * Also make sure we don't go past the end of the string.
+		 *
+		 * Or if we're not parsing a quoted identifier, stop whenever we encounter
+		 * any character which would require quotes.  Note that we don't care what
+		 * the character is; it's up to the caller to see whether it makes sense to
+		 * have that character in there.
+		 */
+		if (quoted)
+		{
+			if (*p == '"')
+			{
+				p++;
+				if (*p != '"')
+					return p;
+			}
+			else if (*p == '\0')
+				return NULL;
+		}
+		else if (!((*p >= 'a' && *p <= 'z') ||
+				  (*p >= '0' && *p <= '9') ||
+				  (*p == '_')))
+			return p;
+
+		p++;
+	}
+}
+
 static char *
 get_object_filename(ArchiveHandle *AH, TocEntry *te)
 {
@@ -850,9 +902,9 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 
 	if (strcmp(te->desc, "FUNCTION") == 0)
 	{
+		char *buf;
 		char *proname;
 		char *p;
-		bool quoted;
 
 		/*
 		 * Parse the actual function name from the tag.  This is a bit tricky since
@@ -863,69 +915,46 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		 * almost impossible since the function name doesn't have the quotes; we
 		 * wouldn't know where the name ends and the argument list starts.
 		 */
-		proname = pg_strdup(te->tag);
-		p = proname + strlen(proname) - 1;
-		if (*p-- != ')')
-			exit_horribly(modulename, "could not parse function tag \"%s\"\n", te->tag);
+		buf = pg_strdup(te->dropStmt);
+		if (strncmp(buf, "DROP FUNCTION ", 14) != 0)
+			exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
 
-		/* loop through the argument list */
-		for (;;)
+		proname = buf + 14;
+
+		p = skip_identifier(proname);
+		if (!p)
+			exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
+		
+		/*
+		 * If there's a namespace, ignore it and find the end of the next identifier.
+		 * That should be the name of the function.
+		 */
+		if (*p == '.')
 		{
-			/* are we done? */
-			if (*p == '(')
-			{
-				*p = '\0';
-				break;
-			}
-
-			/* 
-			 * Ok, we're not done so we must be at the end of a type name.  See if it's
-			 * quoted.
-			 */
-			quoted = (*p == '"');
-
-			/* skip the quote or the last character of the type name */
-			p--;
-
-			/* loop until we've skipped through the entire type name */
-			for (;;)
-			{
-				/*
-				 * There should always be at least two characters available.  Check that
-				 * here so we can slightly simplify the logic below.
-				 */
-				if (p <= proname + 2)
-					exit_horribly(modulename, "could not parse function tag \"%s\"\n", te->tag);
-
-				if (quoted && *p == '"')
-				{
-					/* if this is an escaped quote inside the quotes, skip it */
-					p--;
-					if (*p == '"')
-					{
-						p--;
-						continue;
-					}
-					else
-					{
-						quoted = false;
-						continue;
-					}
-				}
-				else if (!quoted && *p == ',')
-				{
-					p--;
-					break;
-				}
-				else if (!quoted && *p == '(')
-					break;
-				else
-					p--;
-			}
+			proname = p + 1;
+			p = skip_identifier(proname);
+			if (!p)
+				exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
 		}
 
+		/* the argument list should be right after the function name */
+		if (*p != '(')
+			exit_horribly(modulename, "could not parse DROP statement \"%s\"\n", te->dropStmt);
+
+		/*
+		 * Terminate the identifier before the argument list definition, removing
+		 * quotes if necessary.
+		 */
+		if (*proname == '"')
+		{
+			proname++;
+			*(p-1) = '\0';
+		}
+		else
+			*p = '\0';
+
 		snprintf(path, MAXPGPATH, "%s/FUNCTIONS/%s.sql", te->namespace, encode_filename(proname));
-		free(proname);
+		free(buf);
 		return pg_strdup(path);
 	}
 
