@@ -22,6 +22,8 @@
  */
 
 #include "postgres_fe.h"
+#include "libpq-fe.h"
+#include "libpq/libpq-fs.h"
 #include "pg_backup_archiver.h"
 #include "dumpmem.h"
 #include "dumputils.h"
@@ -64,6 +66,7 @@ static void _CloseArchive(ArchiveHandle *AH);
 
 static void _StartBlobs(ArchiveHandle *AH, TocEntry *te);
 static void _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
+static size_t _WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen);
 static void _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
 
@@ -151,6 +154,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 					  ctx->directory, strerror(errno));
 
 	create_directory(AH, "EXTENSIONS");
+	create_directory(AH, "BLOBS");
 }
 
 static void
@@ -191,7 +195,15 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (te->dataDumper)
 	{
-		snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.sql", encode_filename(te->namespace), te->dumpId);
+		if (strcmp(te->desc, "TABLE DATA") == 0)
+			snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.sql", encode_filename(te->namespace), te->dumpId);
+		else if (strcmp(te->desc, "BLOBS") == 0)
+		{
+			tctx->filename = NULL;
+			return;
+		}
+		else
+			exit_horribly(modulename, "unknown data object %s\n", te->desc);
 		tctx->filename = pg_strdup(fn);
 		return;
 	}
@@ -329,7 +341,7 @@ _StartBlobs(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char	   *fname;
 
-	fname = prepend_directory(AH, "blobs.toc");
+	fname = prepend_directory(AH, "blobs.sql");
 
 	ctx->blobsTocFH = fopen(fname, "ab");
 	if (ctx->blobsTocFH == NULL)
@@ -348,12 +360,39 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char		fname[MAXPGPATH];
 
-	snprintf(fname, MAXPGPATH, "%s/blob_%u.dat", ctx->directory, oid);
-
+	snprintf(fname, MAXPGPATH, "%s/BLOBS/%u.dat", ctx->directory, oid);
 	ctx->dataFH = fopen(fname, PG_BINARY_W);
 	if (ctx->dataFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
+
+	fprintf(ctx->dataFH, "SELECT pg_catalog.lo_open('%u', %d);\n", oid, INV_WRITE);
+
+	AH->WriteDataPtr = _WriteBlobData;
+}
+
+/*
+ * Called by dumper via archiver from within a data dump routine.
+ * We substitute this for _WriteData while emitting a BLOB.
+ */
+static size_t
+_WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen)
+{
+	lclContext *ctx = (lclContext *) AH->formatData;
+
+	if (dLen > 0)
+	{
+		PQExpBuffer buf = createPQExpBuffer();
+		appendByteaLiteralAHX(buf,
+							  (const unsigned char *) data,
+							  dLen,
+							  AH);
+		
+		fprintf(ctx->dataFH, "SELECT pg_catalog.lowrite(0, %s);\n", buf->data);
+		destroyPQExpBuffer(buf);
+	}
+
+	return dLen;
 }
 
 /*
@@ -365,17 +404,15 @@ static void
 _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 {
 	lclContext *ctx = (lclContext *) AH->formatData;
-	char		buf[50];
-	int			len;
+
+	fprintf(ctx->dataFH, "SELECT pg_catalog.lo_close(0);\n\n");
 
 	/* Close the BLOB data file itself */
 	fclose(ctx->dataFH);
 	ctx->dataFH = NULL;
 
-	/* register the blob in blobs.toc */
-	len = snprintf(buf, sizeof(buf), "%u blob_%u.dat\n", oid, oid);
-	if (fwrite(buf, 1, len, ctx->blobsTocFH) != len)
-		exit_horribly(modulename, "could not write to blobs TOC file\n");
+	/* Restore the pointer */
+	AH->WriteDataPtr = _WriteData;
 }
 
 /*
@@ -485,9 +522,12 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
 		type = "TABLE";
 
-	/* LARGE OBJECT for BLOBs */
+	/* numeric tag for LARGE OBJECTs */
 	if (strcmp(type, "BLOB") == 0)
-		type = "LARGE OBJECT";
+	{
+		fprintf(fh, "LARGE OBJECT %s ", te->tag);
+		return;
+	}
 
 	/* a number of objects that require no special treatment */
 	if (strcmp(type, "COLLATION") == 0 ||
@@ -555,6 +595,7 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "EXTENSION") == 0 ||
 		strcmp(te->desc, "FK CONSTRAINT") == 0 ||
+		strcmp(te->desc, "LARGE OBJECT") == 0 ||
 		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
 		strcmp(te->desc, "SEQUENCE SET") == 0 ||
 		strcmp(te->desc, "STDSTRINGS") == 0 ||
@@ -614,7 +655,7 @@ write_split_directory(ArchiveHandle *AH)
 
 		tctx = (lclTocEntry *) te->formatData;
 
-		/* for TABLEDATA we always add an index entry */
+		/* for TABLEDATA, the only thing we need to do is add an index entry */
 		if (strcmp(te->desc, "TABLE DATA") == 0)
 		{
 			fprintf(indexFH, "\\i %s\n", tctx->filename);
@@ -652,6 +693,9 @@ write_split_directory(ArchiveHandle *AH)
 		set_search_path(AH, te, fh);
 
 		fprintf(fh, "%s\n", te->defn);
+
+		if (strcmp(te->desc, "BLOB") == 0)
+			fprintf(fh, "\\i BLOBS/%s.dat\n\n", te->tag);
 
 		add_ownership_information(AH, te, fh);
 
@@ -868,8 +912,11 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	if (strcmp(te->desc, "SCHEMA") == 0)
 		create_schema_directory(AH, te->tag);
 
-	if (strcmp(te->desc, "BLOBS") == 0)
-		return pg_strdup("blobs.toc");
+	if (strcmp(te->desc, "BLOB") == 0)
+	{
+		snprintf(path, MAXPGPATH, "blobs.sql");
+		return pg_strdup(path);
+	}
 
 	if (strcmp(te->desc, "SCHEMA") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
