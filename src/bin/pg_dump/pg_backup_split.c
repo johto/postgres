@@ -58,7 +58,6 @@ static void _ArchiveEntry(ArchiveHandle *AH, TocEntry *te);
 static void _StartData(ArchiveHandle *AH, TocEntry *te);
 static void _EndData(ArchiveHandle *AH, TocEntry *te);
 static size_t _WriteData(ArchiveHandle *AH, const void *data, size_t dLen);
-static int	_WriteByte(ArchiveHandle *AH, const int i);
 static size_t _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len);
 static void _CloseArchive(ArchiveHandle *AH);
 
@@ -103,7 +102,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->StartDataPtr = _StartData;
 	AH->WriteDataPtr = _WriteData;
 	AH->EndDataPtr = _EndData;
-	AH->WriteBytePtr = _WriteByte;
+	AH->WriteBytePtr = NULL;
 	AH->ReadBytePtr = NULL;
 	AH->WriteBufPtr = _WriteBuf;
 	AH->ReadBufPtr = NULL;
@@ -259,23 +258,6 @@ _EndData(ArchiveHandle *AH, TocEntry *te)
 }
 
 /*
- * Write a byte of data to the archive.
- * Called by the archiver to do integer & byte output to the archive.
- * These routines are only used to read & write the headers & TOC.
- */
-static int
-_WriteByte(ArchiveHandle *AH, const int i)
-{
-	unsigned char c = (unsigned char) i;
-	lclContext *ctx = (lclContext *) AH->formatData;
-
-	if (cfwrite(&c, 1, ctx->dataFH) != 1)
-		exit_horribly(modulename, "could not write byte\n");
-
-	return 1;
-}
-
-/*
  * Write a buffer of data to the archive.
  * Called by the archiver to write a block of bytes to the TOC or a data file.
  */
@@ -300,10 +282,10 @@ _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len)
  * the process of saving it to files. No data should be written prior
  * to this point, since the user could sort the TOC after creating it.
  *
- * If an archive is to be written, this routine must call:
- *		WriteHead			to save the archive header
- *		WriteToc			to save the TOC entries
- *		WriteDataChunks		to save all DATA & BLOBs.
+ * Usually when an archive is written, we should call WriteHead() and
+ * WriteToc().  But since we don't write a TOC file at all, we can just
+ * skip that and write the index file from the TocEntry array.  We do,
+ * however, use WriteDataChunks() to write the table data.
  */
 static void
 _CloseArchive(ArchiveHandle *AH)
