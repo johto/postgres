@@ -471,7 +471,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 {
 	const char *type = te->desc;
 
-	/* Use ALTER TABLE for views and sequences */
+	/* use ALTER TABLE for views and sequences */
 	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
 		type = "TABLE";
 
@@ -479,7 +479,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	if (strcmp(type, "BLOB") == 0)
 		type = "LARGE OBJECT";
 
-
+	/* a number of objects that require no special treatment */
 	if (strcmp(type, "COLLATION") == 0 ||
 		strcmp(type, "CONVERSION") == 0 ||
 		strcmp(type, "DOMAIN") == 0 ||
@@ -514,7 +514,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(type, "OPERATOR CLASS") == 0 ||
 		strcmp(type, "OPERATOR FAMILY") == 0)
 	{
-		/* Chop "DROP " off the front and make a modifyable copy */
+		/* chop "DROP " off the front and make a modifyable copy */
 		char *first = pg_strdup(te->dropStmt + 5);
 		char *last;
 
@@ -573,6 +573,11 @@ set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		fprintf(fh, "SET search_path TO '%s', pg_catalog;\n\n", te->namespace);
 }
 
+/*
+ * Majority of the work is done here.  We scan through the list of TOC entries
+ * and write the object definitions into their respective files.  At the same
+ * time, we build the "index" file.
+ */
 static void
 write_split_directory(ArchiveHandle *AH)
 {
