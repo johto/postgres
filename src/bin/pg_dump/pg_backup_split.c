@@ -582,6 +582,7 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(te->desc, "EXTENSION") == 0 ||
 		strcmp(te->desc, "FK CONSTRAINT") == 0 ||
 		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
+		strcmp(te->desc, "SEQUENCE SET") == 0 ||
 		strcmp(te->desc, "STDSTRINGS") == 0 ||
 		strcmp(te->desc, "TRIGGER") == 0)
 		return;
