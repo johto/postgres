@@ -168,6 +168,7 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/AGGREGATES", namespace);
 	create_directory(AH, "%s/OPERATOR_CLASSES", namespace);
 	create_directory(AH, "%s/OPERATOR_FAMILIES", namespace);
+	create_directory(AH, "%s/TABLEDATA", namespace);
 }
 
 /*
@@ -187,7 +188,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (te->dataDumper)
 	{
-		snprintf(fn, MAXPGPATH, "%s/TABLES/%d.dat", encode_filename(te->namespace), te->dumpId);
+		snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.dat", encode_filename(te->namespace), te->dumpId);
 		tctx->filename = pg_strdup(fn);
 		return;
 	}
@@ -214,7 +215,7 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 
 	fname = prepend_directory(AH, tctx->filename);
 
-	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, AH->compression);
+	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, 0);
 	if (ctx->dataFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
