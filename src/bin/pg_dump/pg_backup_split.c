@@ -136,6 +136,9 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	if (!AH->fSpec || strcmp(AH->fSpec, "") == 0)
 		exit_horribly(modulename, "no output directory specified\n");
 
+	if (AH->compression != 0)
+		exit_horribly(modulename, "split archive format does not support compression\n");
+
 	ctx->directory = AH->fSpec;
 
 	if (AH->mode == archModeWrite)
