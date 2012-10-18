@@ -42,7 +42,7 @@ typedef struct
 	 */
 	char	   *directory;
 
-	cfp		   *dataFH;			/* currently open data file */
+	FILE	   *dataFH;			/* currently open data file */
 
 	cfp		   *blobsTocFH;		/* file handle for blobs.toc */
 
@@ -79,6 +79,7 @@ static void create_directory(ArchiveHandle *AH, const char *fmt, ...)
 	__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 static char *prepend_directory(ArchiveHandle *AH, const char *relativeFilename);
 static char *encode_filename(const char *input);
+static TocEntry *find_dependency(ArchiveHandle *AH, TocEntry *te);
 static char *get_object_filename(ArchiveHandle *AH, TocEntry *t);
 
 
@@ -189,7 +190,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (te->dataDumper)
 	{
-		snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.dat", encode_filename(te->namespace), te->dumpId);
+		snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.sql", encode_filename(te->namespace), te->dumpId);
 		tctx->filename = pg_strdup(fn);
 		return;
 	}
@@ -216,10 +217,20 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 
 	fname = prepend_directory(AH, tctx->filename);
 
-	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, 0);
+	ctx->dataFH = fopen(fname, PG_BINARY_W);
 	if (ctx->dataFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
+
+	/* set the search path */
+	set_search_path(AH, te, ctx->dataFH);
+
+	/*
+	 * If there's a COPY statement, add it to the beginning of the file.  If there
+	 * isn't one, this must be a --inserts dump.
+	 */
+	if (te->copyStmt)
+		fprintf(ctx->dataFH, "%s", te->copyStmt);
 }
 
 /*
@@ -239,7 +250,7 @@ _WriteData(ArchiveHandle *AH, const void *data, size_t dLen)
 	if (dLen == 0)
 		return 0;
 
-	return cfwrite(data, dLen, ctx->dataFH);
+	return fwrite(data, 1, dLen, ctx->dataFH);
 }
 
 /*
@@ -254,7 +265,7 @@ _EndData(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 
 	/* Close the file */
-	cfclose(ctx->dataFH);
+	fclose(ctx->dataFH);
 
 	ctx->dataFH = NULL;
 }
@@ -269,7 +280,7 @@ _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	size_t		res;
 
-	res = cfwrite(buf, len, ctx->dataFH);
+	res = fwrite(buf, 1, len, ctx->dataFH);
 	if (res != len)
 		exit_horribly(modulename, "could not write to output file: %s\n",
 					  strerror(errno));
@@ -339,8 +350,7 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 
 	snprintf(fname, MAXPGPATH, "%s/blob_%u.dat", ctx->directory, oid);
 
-	ctx->dataFH = cfopen_write(fname, PG_BINARY_W, AH->compression);
-
+	ctx->dataFH = fopen(fname, PG_BINARY_W);
 	if (ctx->dataFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
@@ -359,7 +369,7 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	int			len;
 
 	/* Close the BLOB data file itself */
-	cfclose(ctx->dataFH);
+	fclose(ctx->dataFH);
 	ctx->dataFH = NULL;
 
 	/* register the blob in blobs.toc */
@@ -604,6 +614,13 @@ write_split_directory(ArchiveHandle *AH)
 
 		tctx = (lclTocEntry *) te->formatData;
 
+		/* for TABLEDATA we always add an index entry */
+		if (strcmp(te->desc, "TABLE DATA") == 0)
+		{
+			fprintf(indexFH, "\\i %s\n", tctx->filename);
+			continue;
+		}
+
 		/* skip data */
 		if (te->dataDumper)
 			continue;
@@ -793,6 +810,26 @@ skip_identifier(char *buf)
 	}
 }
 
+static TocEntry *
+find_dependency(ArchiveHandle *AH, TocEntry *te)
+{
+	DumpId depId;
+	TocEntry *depte;
+
+	if (te->nDeps != 1)
+		exit_horribly(modulename, "unexpected number of dependencies (%d) for \"%s\" %d\n", te->nDeps, te->desc, te->dumpId);
+
+	depId = te->dependencies[0];
+
+	for (depte = te->prev; depte != te; depte = depte->prev)
+	{
+		if (depte->dumpId == depId)
+			return depte;
+	}
+
+	exit_horribly(modulename, "could not find dependency %d for \"%s\" %d\n", depId, te->desc, te->dumpId);
+}
+
 static char *
 get_object_filename(ArchiveHandle *AH, TocEntry *te)
 {
@@ -869,30 +906,15 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		strcmp(te->desc, "COMMENT") == 0)
 	{
 		TocEntry *depte;
-		DumpId depId;
+		lclTocEntry *depctx;
 
-		if (te->nDeps != 1)
-			exit_horribly(modulename, "unexpected number of dependencies (%d) for \"%s\" %d\n", te->nDeps, te->desc, te->dumpId);
+		depte = find_dependency(AH, te);
+		depctx = (lclTocEntry *) depte->formatData;
+		if (!depctx)
+			exit_horribly(modulename, "unexpected NULL formatData\n");
 
-		depId = *te->dependencies;
-		for (depte = te->prev; depte != te; depte = depte->prev)
-		{
-			if (depte->dumpId == depId)
-			{
-				lclTocEntry *depentry = (lclTocEntry *) depte->formatData;
-
-				if (!depentry)
-					exit_horribly(modulename, "unexpected NULL depentry");
-				
-				/*
-				 * No need to strdup since depentry's filename is either NULL or an
-				 * strdup()'d string.
-				 */
-				return depentry->filename;
-			}
-		}
-
-		exit_horribly(modulename, "could not find dependency %d for \"%s\" %d\n", depId, te->desc, te->dumpId);
+		/* no need to strdup() */
+		return depctx->filename;
 	}
 
 	if (strcmp(te->desc, "AGGREGATE") == 0 ||
