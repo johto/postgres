@@ -21,7 +21,8 @@
  *-------------------------------------------------------------------------
  */
 
-#include "compress_io.h"
+#include "postgres_fe.h"
+#include "pg_backup_archiver.h"
 #include "dumpmem.h"
 #include "dumputils.h"
 
@@ -44,7 +45,7 @@ typedef struct
 
 	FILE	   *dataFH;			/* currently open data file */
 
-	cfp		   *blobsTocFH;		/* file handle for blobs.toc */
+	FILE	   *blobsTocFH;		/* file handle for blobs.toc */
 
 	lclTocEntry **sortedToc;	/* array of toc entires sorted by (filename, dumpId) */
 } lclContext;
@@ -330,8 +331,7 @@ _StartBlobs(ArchiveHandle *AH, TocEntry *te)
 
 	fname = prepend_directory(AH, "blobs.toc");
 
-	/* The blob TOC file is never compressed */
-	ctx->blobsTocFH = cfopen_write(fname, "ab", 0);
+	ctx->blobsTocFH = fopen(fname, "ab");
 	if (ctx->blobsTocFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
@@ -374,7 +374,7 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 
 	/* register the blob in blobs.toc */
 	len = snprintf(buf, sizeof(buf), "%u blob_%u.dat\n", oid, oid);
-	if (cfwrite(buf, len, ctx->blobsTocFH) != len)
+	if (fwrite(buf, 1, len, ctx->blobsTocFH) != len)
 		exit_horribly(modulename, "could not write to blobs TOC file\n");
 }
 
@@ -388,7 +388,7 @@ _EndBlobs(ArchiveHandle *AH, TocEntry *te)
 {
 	lclContext *ctx = (lclContext *) AH->formatData;
 
-	cfclose(ctx->blobsTocFH);
+	fclose(ctx->blobsTocFH);
 	ctx->blobsTocFH = NULL;
 }
 
