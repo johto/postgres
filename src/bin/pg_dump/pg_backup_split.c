@@ -678,9 +678,6 @@ write_split_directory(ArchiveHandle *AH)
 
 		fprintf(fh, "%s\n", te->defn);
 
-		if (strcmp(te->desc, "BLOB") == 0)
-			fprintf(fh, "\\i BLOBS/%s.dat\n\n", te->tag);
-
 		add_ownership_information(AH, te, fh);
 
 		fclose(fh);
