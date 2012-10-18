@@ -187,26 +187,10 @@ static void
 _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 {
 	lclTocEntry *tctx;
-	char		fn[MAXPGPATH];
 
 	tctx = (lclTocEntry *) pg_malloc0(sizeof(lclTocEntry));
 	tctx->dumpId = te->dumpId;
 	te->formatData = (void *) tctx;
-
-	if (te->dataDumper)
-	{
-		if (strcmp(te->desc, "TABLE DATA") == 0)
-			snprintf(fn, MAXPGPATH, "%s/TABLEDATA/%d.sql", encode_filename(te->namespace), te->dumpId);
-		else if (strcmp(te->desc, "BLOBS") == 0)
-		{
-			tctx->filename = NULL;
-			return;
-		}
-		else
-			exit_horribly(modulename, "unknown data object %s\n", te->desc);
-		tctx->filename = pg_strdup(fn);
-		return;
-	}
 
 	tctx->filename = get_object_filename(AH, te);
 }
@@ -900,6 +884,26 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		{ "TRIGGER",			"TRIGGERS"			},
 		{ "VIEW",				"VIEWS"				}
 	};
+
+
+	if (te->dataDumper)
+	{
+		if (strcmp(te->desc, "TABLE DATA") == 0)
+		{
+			snprintf(path, MAXPGPATH, "%s/TABLEDATA/%d.sql", encode_filename(te->namespace), te->dumpId);
+			return pg_strdup(path);
+		}
+		else if (strcmp(te->desc, "BLOBS") == 0)
+		{
+			/*
+			 * Return NULL for BLOBS.  The _*_Blob functions will know how to find the
+			 * correct files -- we don't since we don't know the oids yet.
+			 */
+			return NULL;
+		}
+
+		exit_horribly(modulename, "unknown data object %s\n", te->desc);
+	}
 
 	/*
 	 * There's no need to create a database; one should always exist when
