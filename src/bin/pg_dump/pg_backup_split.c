@@ -59,7 +59,6 @@ static void _StartData(ArchiveHandle *AH, TocEntry *te);
 static void _EndData(ArchiveHandle *AH, TocEntry *te);
 static size_t _WriteData(ArchiveHandle *AH, const void *data, size_t dLen);
 static int	_WriteByte(ArchiveHandle *AH, const int i);
-static int	_ReadByte(ArchiveHandle *);
 static size_t _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len);
 static void _CloseArchive(ArchiveHandle *AH);
 
@@ -105,7 +104,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->WriteDataPtr = _WriteData;
 	AH->EndDataPtr = _EndData;
 	AH->WriteBytePtr = _WriteByte;
-	AH->ReadBytePtr = _ReadByte;
+	AH->ReadBytePtr = NULL;
 	AH->WriteBufPtr = _WriteBuf;
 	AH->ReadBufPtr = NULL;
 	AH->ClosePtr = _CloseArchive;
@@ -274,25 +273,6 @@ _WriteByte(ArchiveHandle *AH, const int i)
 		exit_horribly(modulename, "could not write byte\n");
 
 	return 1;
-}
-
-/*
- * Read a byte of data from the archive.
- * Called by the archiver to read bytes & integers from the archive.
- * These routines are only used to read & write headers & TOC.
- * EOF should be treated as a fatal error.
- */
-static int
-_ReadByte(ArchiveHandle *AH)
-{
-	lclContext *ctx = (lclContext *) AH->formatData;
-	int			res;
-
-	res = cfgetc(ctx->dataFH);
-	if (res == EOF)
-		exit_horribly(modulename, "unexpected end of file\n");
-
-	return res;
 }
 
 /*
