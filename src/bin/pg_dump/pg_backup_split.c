@@ -541,6 +541,7 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te)
 
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
+		strcmp(te->desc, "CAST") == 0 ||
 		strcmp(te->desc, "COMMENT") == 0 ||
 		strcmp(te->desc, "CHECK CONSTRAINT") == 0 ||
 		strcmp(te->desc, "CONSTRAINT") == 0 ||
@@ -929,6 +930,9 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	 */
 	if (strcmp(te->desc, "DEFAULT") == 0)
 		return pg_strdup("defaults.sql");
+
+	if (strcmp(te->desc, "CAST") == 0)
+		return pg_strdup("casts.sql");
 
 	if (strcmp(te->desc, "OPERATOR") == 0)
 	{
