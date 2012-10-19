@@ -661,8 +661,8 @@ write_split_directory(ArchiveHandle *AH)
 		ahprintf(AH, "%s\n", te->defn);
 		
 		/*
-		 * Special case: add \i for BLOBs.  It's ugly to have this here, but there
-		 * really isn't any better place.
+		 * Special case: add \i for BLOBs into the "blobs.sql" data file.  It's ugly
+		 * to have this here, but there really isn't any better place.
 		 */
 		if (strcmp(te->desc, "BLOB") == 0)
 			ahprintf(AH, "\\i BLOBS/%s.sql\n\n", te->tag);
