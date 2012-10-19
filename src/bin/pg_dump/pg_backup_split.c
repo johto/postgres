@@ -790,7 +790,7 @@ encode_filename(const char *input)
 
 	/*
 	 * The input filename should be at most 64 bytes (because it comes from the
-	 * "name" datatype, so this should never happen.
+	 * "name" datatype), so this should never happen.
 	 */
 	if (strlen(input) >= MAXPGPATH)
 		exit_horribly(modulename, "file name too long: \"%s\"\n", input);
