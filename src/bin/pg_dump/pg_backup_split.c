@@ -918,12 +918,11 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		return pg_strdup("dbwide.sql");
 
 	/*
-	 * We unfortunately don't know which tables the DEFAULT values go to, so we
-	 * just add them in after the data has been restored.  It would be nice to
-	 * fix this at some point..
+	 * If some of the DEFAULTs have more complex dependencies, they're just dumped
+	 * into a separate "defaults.sql" file.
 	 */
 	if (strcmp(te->desc, "DEFAULT") == 0)
-		return pg_strdup("postdata.sql");
+		return pg_strdup("defaults.sql");
 
 	if (strcmp(te->desc, "OPERATOR") == 0)
 	{
