@@ -2,11 +2,20 @@ CREATE FUNCTION foof() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
 CREATE TABLE foot AS SELECT a FROM generate_series(1, 100) a;
 CREATE TYPE footype AS (a int);
 
+ALTER TABLE foot ALTER COLUMN a SET DEFAULT 0;
+
 CREATE TABLE "tricky"" table()" ("tricky"" column()" int PRIMARY KEY);
 CREATE TABLE "tricky"" table2()" (a int PRIMARY KEY REFERENCES "tricky"" table()" ("tricky"" column()"));
 CREATE FUNCTION "tricky"" function()"() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
 CREATE TYPE "tricky"" type()" AS (a int);
 CREATE FUNCTION "tricky"" function()"("tricky"" type()") RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
+
+ALTER TABLE "tricky"" table()" ALTER COLUMN "tricky"" column()" SET DEFAULT "tricky"" function()"();
+
+-- tricky dependency
+CREATE TABLE "tricky"" deptable()"(a int);
+CREATE FUNCTION "tricky"" depfunction()"("tricky"" deptable()") RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
+ALTER TABLE "tricky"" deptable()" ALTER COLUMN a SET DEFAULT "tricky"" depfunction()"(NULL);
 
 CREATE OR REPLACE FUNCTION first_agg (anyelement, anyelement)
 RETURNS anyelement LANGUAGE sql IMMUTABLE STRICT AS $$ SELECT $1; $$;
