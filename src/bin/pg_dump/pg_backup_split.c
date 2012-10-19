@@ -1016,10 +1016,12 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		/* must use 2 steps here because encode_filename() is nonreentrant */
 		appendPQExpBuffer(temp, "%s/", encode_filename(te->namespace));
 		appendPQExpBuffer(temp, "%sS/%s.sql", te->desc, encode_filename(proname));
-		free(buf);
 
 		fname = pg_strdup(temp->data);
+
 		destroyPQExpBuffer(temp);
+		free(buf);
+
 		return fname;
 	}
 
