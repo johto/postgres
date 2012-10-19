@@ -670,7 +670,9 @@ write_split_directory(ArchiveHandle *AH)
 		/* for TABLEDATA, the only thing we need to do is add an index entry */
 		if (strcmp(te->desc, "TABLE DATA") == 0)
 		{
-			fprintf(indexFH, "\\i %s\n", tctx->filename);
+			snprintf(buf, sizeof(buf), "\\i %s\n", tctx->filename);
+			if (fwrite(buf, 1, strlen(buf), indexFH) != strlen(buf))
+				exit_horribly(modulename, "could not write index file: %s\n", strerror(errno));
 			continue;
 		}
 
