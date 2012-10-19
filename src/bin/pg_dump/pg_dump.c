@@ -409,19 +409,19 @@ main(int argc, char **argv)
 				break;
 
 			case 'E':			/* Dump encoding */
-				dumpencoding = optarg;
+				dumpencoding = pg_strdup(optarg);
 				break;
 
 			case 'f':
-				filename = optarg;
+				filename = pg_strdup(optarg);
 				break;
 
 			case 'F':
-				format = optarg;
+				format = pg_strdup(optarg);
 				break;
 
 			case 'h':			/* server host */
-				pghost = optarg;
+				pghost = pg_strdup(optarg);
 				break;
 
 			case 'i':
@@ -446,7 +446,7 @@ main(int argc, char **argv)
 				break;
 
 			case 'p':			/* server port */
-				pgport = optarg;
+				pgport = pg_strdup(optarg);
 				break;
 
 			case 'R':
@@ -471,7 +471,7 @@ main(int argc, char **argv)
 				break;
 
 			case 'U':
-				username = optarg;
+				username = pg_strdup(optarg);
 				break;
 
 			case 'v':			/* verbose */
@@ -499,11 +499,11 @@ main(int argc, char **argv)
 				break;
 
 			case 2:				/* lock-wait-timeout */
-				lockWaitTimeout = optarg;
+				lockWaitTimeout = pg_strdup(optarg);
 				break;
 
 			case 3:				/* SET ROLE */
-				use_role = optarg;
+				use_role = pg_strdup(optarg);
 				break;
 
 			case 4:				/* exclude table(s) data */
@@ -3583,16 +3583,8 @@ getAggregates(Archive *fout, int *numAggs)
 						  "WHERE proisagg AND ("
 						  "pronamespace != "
 						  "(SELECT oid FROM pg_namespace "
-						  "WHERE nspname = 'pg_catalog')",
+						  "WHERE nspname = 'pg_catalog'))",
 						  username_subquery);
-		if (binary_upgrade && fout->remoteVersion >= 90100)
-			appendPQExpBuffer(query,
-							  " OR EXISTS(SELECT 1 FROM pg_depend WHERE "
-							  "classid = 'pg_proc'::regclass AND "
-							  "objid = p.oid AND "
-							  "refclassid = 'pg_extension'::regclass AND "
-							  "deptype = 'e')");
-		appendPQExpBuffer(query, ")");
 	}
 	else if (fout->remoteVersion >= 70300)
 	{
@@ -3788,21 +3780,8 @@ getFuncs(Archive *fout, int *numFuncs)
 						  "WHERE NOT proisagg AND ("
 						  "pronamespace != "
 						  "(SELECT oid FROM pg_namespace "
-						  "WHERE nspname = 'pg_catalog')",
+						  "WHERE nspname = 'pg_catalog'))",
 						  username_subquery);
-		if (fout->remoteVersion >= 90200)
-			appendPQExpBuffer(query,
-							  "\n  AND NOT EXISTS (SELECT 1 FROM pg_depend "
-							  "WHERE classid = 'pg_proc'::regclass AND "
-							  "objid = p.oid AND deptype = 'i')");
-		if (binary_upgrade && fout->remoteVersion >= 90100)
-			appendPQExpBuffer(query,
-							  "\n  OR EXISTS(SELECT 1 FROM pg_depend WHERE "
-							  "classid = 'pg_proc'::regclass AND "
-							  "objid = p.oid AND "
-							  "refclassid = 'pg_extension'::regclass AND "
-							  "deptype = 'e')");
-		appendPQExpBuffer(query, ")");
 	}
 	else if (fout->remoteVersion >= 70100)
 	{
