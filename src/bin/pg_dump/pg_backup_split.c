@@ -137,7 +137,7 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	ctx->directory = AH->fSpec;
 
 	if (mkdir(ctx->directory, 0700) < 0)
-	exit_horribly(modulename, "could not create directory \"%s\": %s\n",
+		exit_horribly(modulename, "could not create directory \"%s\": %s\n",
 					  ctx->directory, strerror(errno));
 
 	create_directory(AH, "EXTENSIONS");
