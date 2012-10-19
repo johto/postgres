@@ -233,11 +233,9 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 }
 
 /*
- * Called by archiver when dumper calls WriteData. This routine is
- * called for both BLOB and TABLE data; it is the responsibility of
- * the format to manage each kind of data using StartBlob/StartData.
- *
- * It should only be called from within a DataDumper routine.
+ * Called by archiver when dumper calls WriteData. Note that while the
+ * WriteData routine is generally called for both BLOB and TABLE data, we
+ * substitute our own _WriteBlob function when dealing with BLOBs.
  *
  * We write the data to the open data file.
  */
