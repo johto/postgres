@@ -169,6 +169,7 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/INDEXES", namespace);
 	create_directory(AH, "%s/SEQUENCES", namespace);
 	create_directory(AH, "%s/VIEWS", namespace);
+	create_directory(AH, "%s/CHECK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/CONSTRAINTS", namespace);
 	create_directory(AH, "%s/FK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/TYPES", namespace);
@@ -540,6 +541,7 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te)
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
 		strcmp(te->desc, "COMMENT") == 0 ||
+		strcmp(te->desc, "CHECK CONSTRAINT") == 0 ||
 		strcmp(te->desc, "CONSTRAINT") == 0 ||
 		strcmp(te->desc, "DEFAULT") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
@@ -861,6 +863,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	const char * const object_types[][2] =
 	{
 		{ "AGGREGATE",			"AGGREGATES"		},
+		{ "CHECK CONSTRAINT",	"CHECK_CONSTRAINTS" },
 		{ "CONSTRAINT",			"CONSTRAINTS"		},
 		{ "EXTENSION",			"EXTENSIONS"		},
 		{ "FK CONSTRAINT",		"FK_CONSTRAINTS"	},
