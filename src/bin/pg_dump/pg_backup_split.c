@@ -2,21 +2,9 @@
  *
  * pg_backup_split.c
  *
- *	A directory format dump is a directory, which contains a "toc.dat" file
- *	for the TOC, and a separate file for each data entry, named "<oid>.dat".
- *	Large objects (BLOBs) are stored in separate files named "blob_<uid>.dat",
- *	and there's a plain-text TOC file for them called "blobs.toc". If
- *	compression is used, each data file is individually compressed and the
- *	".gz" suffix is added to the filenames. The TOC files are never
- *	compressed by pg_dump, however they are accepted with the .gz suffix too,
- *	in case the user has manually compressed them with 'gzip'.
- *
- *	NOTE: This format is identical to the files written in the tar file in
- *	the 'tar' format, except that we don't write the restore.sql file (TODO),
- *	and the tar format doesn't support compression. Please keep the formats in
- *	sync.
- *
- * XXX updateme
+ *  A split format dump is a directory, which contains all database objects
+ *  separated into .sql files, and an "index.sql" file with psql statements
+ *  to allow restoring the separated objects.
  *
  *-------------------------------------------------------------------------
  */
