@@ -178,6 +178,7 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/OPERATOR_CLASSES", namespace);
 	create_directory(AH, "%s/OPERATOR_FAMILIES", namespace);
 	create_directory(AH, "%s/TABLEDATA", namespace);
+	create_directory(AH, "%s/RULES", namespace);
 }
 
 /*
@@ -548,6 +549,7 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te)
 		strcmp(te->desc, "EXTENSION") == 0 ||
 		strcmp(te->desc, "FK CONSTRAINT") == 0 ||
 		strcmp(te->desc, "LARGE OBJECT") == 0 ||
+		strcmp(te->desc, "RULE") == 0 ||
 		strcmp(te->desc, "SEQUENCE OWNED BY") == 0 ||
 		strcmp(te->desc, "SEQUENCE SET") == 0 ||
 		strcmp(te->desc, "STDSTRINGS") == 0 ||
@@ -871,6 +873,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		{ "SEQUENCE",			"SEQUENCES"			},
 		{ "OPERATOR CLASS",		"OPERATOR_CLASSES"	},
 		{ "OPERATOR FAMILY",	"OPERATOR_FAMILIES"	},
+		{ "RULE",				"RULES"				},
 		{ "TABLE",				"TABLES"			},
 		{ "TYPE",				"TYPES"				},
 		{ "TRIGGER",			"TRIGGERS"			},
