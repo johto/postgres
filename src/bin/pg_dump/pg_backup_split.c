@@ -963,7 +963,8 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		char *buf;
 		char *proname;
 		char *p;
-		char *namespace;
+		char *fname;
+		PQExpBuffer temp;
 
 		/*
 		 * Parse the actual function/aggregate name from the DROP statement.  This is
@@ -1011,15 +1012,15 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		else
 			*p = '\0';
 
-		/*
-		 * UGH.  this is ugly.  encode_filename() returns a pointer to a static
-		 * buffer so we need to strdup() it.
-		 */
-		namespace = pg_strdup(encode_filename(te->namespace));
-		snprintf(path, MAXPGPATH, "%s/%sS/%s.sql", namespace, te->desc, encode_filename(proname));
+		temp = createPQExpBuffer();
+		/* must use 2 steps here because encode_filename() is nonreentrant */
+		appendPQExpBuffer(temp, "%s/", encode_filename(te->namespace));
+		appendPQExpBuffer(temp, "%sS/%s.sql", te->desc, encode_filename(proname));
 		free(buf);
-		free(namespace);
-		return pg_strdup(path);
+
+		fname = pg_strdup(temp->data);
+		destroyPQExpBuffer(temp);
+		return fname;
 	}
 
 	/* finally, see if it's any of the objects that require no special treatment */
