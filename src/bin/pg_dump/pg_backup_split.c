@@ -70,12 +70,14 @@ static size_t _WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen);
 static void _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
 
+static size_t _splitOut(ArchiveHandle *AH, const void *buf, size_t len);
+
 static int lclTocEntryCmp(const void *av, const void *bv);
 static bool should_add_index_entry(ArchiveHandle *AH, TocEntry *te);
 static void create_sorted_toc(ArchiveHandle *AH);
-static void get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh);
-static void add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh);
-static void set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh);
+static void get_object_description(ArchiveHandle *AH, TocEntry *te, PQExpBuffer buf);
+static void add_ownership_information(ArchiveHandle *AH, TocEntry *te);
+static void set_search_path(ArchiveHandle *AH, TocEntry *te);
 static void write_split_directory(ArchiveHandle *AH);
 
 static void create_schema_directory(ArchiveHandle *AH, const char *tag);
@@ -126,6 +128,8 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->ClonePtr = NULL;
 	AH->DeClonePtr = NULL;
 
+	AH->CustomOutPtr = _splitOut;
+
 	/* Set up our private context */
 	ctx = (lclContext *) pg_malloc0(sizeof(lclContext));
 	AH->formatData = (void *) ctx;
@@ -155,6 +159,20 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 
 	create_directory(AH, "EXTENSIONS");
 	create_directory(AH, "BLOBS");
+}
+
+/*
+ * Custom output function to write output from ahprintf() to ctx->dataFH.
+ */
+static size_t
+_splitOut(ArchiveHandle *AH, const void *buf, size_t len)
+{
+	lclContext *ctx = (lclContext *) AH->formatData;
+
+	if (!ctx->dataFH)
+		exit_horribly(modulename, "ctx->dataFH is NULL\n");
+
+	return fwrite(buf, 1, len, ctx->dataFH);
 }
 
 static void
@@ -220,14 +238,14 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 					  fname, strerror(errno));
 
 	/* set the search path */
-	set_search_path(AH, te, ctx->dataFH);
+	set_search_path(AH, te);
 
 	/*
 	 * If there's a COPY statement, add it to the beginning of the file.  If there
 	 * isn't one, this must be a --inserts dump.
 	 */
 	if (te->copyStmt)
-		fprintf(ctx->dataFH, "%s", te->copyStmt);
+		ahprintf(AH, "%s", te->copyStmt);
 }
 
 /*
@@ -350,7 +368,7 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
 					  fname, strerror(errno));
 
-	fprintf(ctx->dataFH, "SELECT pg_catalog.lo_open('%u', %d);\n", oid, INV_WRITE);
+	ahprintf(AH, "SELECT pg_catalog.lo_open('%u', %d);\n", oid, INV_WRITE);
 
 	AH->WriteDataPtr = _WriteBlobData;
 }
@@ -362,8 +380,6 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 static size_t
 _WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen)
 {
-	lclContext *ctx = (lclContext *) AH->formatData;
-
 	if (dLen > 0)
 	{
 		PQExpBuffer buf = createPQExpBuffer();
@@ -372,7 +388,7 @@ _WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen)
 							  dLen,
 							  AH);
 		
-		fprintf(ctx->dataFH, "SELECT pg_catalog.lowrite(0, %s);\n", buf->data);
+		ahprintf(AH, "SELECT pg_catalog.lowrite(0, %s);\n", buf->data);
 		destroyPQExpBuffer(buf);
 	}
 
@@ -389,7 +405,7 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 {
 	lclContext *ctx = (lclContext *) AH->formatData;
 
-	fprintf(ctx->dataFH, "SELECT pg_catalog.lo_close(0);\n\n");
+	ahprintf(AH, "SELECT pg_catalog.lo_close(0);\n\n");
 
 	/* Close the BLOB data file itself */
 	fclose(ctx->dataFH);
@@ -498,7 +514,7 @@ create_sorted_toc(ArchiveHandle *AH)
 }
 
 static void
-get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+get_object_description(ArchiveHandle *AH, TocEntry *te, PQExpBuffer buf)
 {
 	const char *type = te->desc;
 
@@ -506,10 +522,10 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0)
 		type = "TABLE";
 
-	/* numeric tag for LARGE OBJECTs */
+	/* must not call fmtId() on BLOBs */
 	if (strcmp(type, "BLOB") == 0)
 	{
-		fprintf(fh, "LARGE OBJECT %s ", te->tag);
+		appendPQExpBuffer(buf, "LARGE OBJECT %s ", te->tag);
 		return;
 	}
 
@@ -521,6 +537,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(type, "FOREIGN DATA WRAPPER") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
 		strcmp(type, "INDEX") == 0 ||
+		strcmp(type, "LARGE OBJECT") == 0 ||
 		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "TEXT SEARCH CONFIGURATION") == 0 ||
 		strcmp(type, "TEXT SEARCH DICTIONARY") == 0 ||
@@ -530,10 +547,10 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(type, "SERVER") == 0 ||
 		strcmp(type, "USER MAPPING") == 0)
 	{
-		fprintf(fh, "%s ", type);
+		appendPQExpBuffer(buf, "%s ", type);
 		if (te->namespace)
-			fprintf(fh, "%s.", fmtId(te->namespace));
-		fprintf(fh, "%s ", fmtId(te->tag));
+			appendPQExpBuffer(buf, "%s.", fmtId(te->namespace));
+		appendPQExpBuffer(buf, "%s ", fmtId(te->tag));
 
 		return;
 	}
@@ -558,7 +575,7 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 			last--;
 		*(last + 1) = '\0';		
 
-		fprintf(fh, "%s ", first);
+		appendPQExpBuffer(buf, "%s ", first);
 
 		free(first);
 
@@ -569,8 +586,10 @@ get_object_description(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 }
 
 static void
-add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+add_ownership_information(ArchiveHandle *AH, TocEntry *te)
 {
+	PQExpBuffer temp;
+
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
 		strcmp(te->desc, "COMMENT") == 0 ||
@@ -586,13 +605,16 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 		strcmp(te->desc, "TRIGGER") == 0)
 		return;
 
-	fprintf(fh, "ALTER ");
-	get_object_description(AH, te, fh);
-	fprintf(fh, "OWNER TO %s;\n\n", fmtId(te->owner));
+	temp = createPQExpBuffer();
+	appendPQExpBuffer(temp, "ALTER ");
+	get_object_description(AH, te, temp);
+	appendPQExpBuffer(temp, "OWNER TO %s;", fmtId(te->owner));
+	ahprintf(AH, "%s\n\n", temp->data);
+	destroyPQExpBuffer(temp);
 }
 
 static void
-set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
+set_search_path(ArchiveHandle *AH, TocEntry *te)
 {
 	if (!te->namespace)
 		return;
@@ -603,9 +625,9 @@ set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 	 * object is moved to another schema.
 	 */
 	if (strcmp(te->namespace, "pg_catalog") == 0)
-		fprintf(fh, "SET search_path TO pg_catalog;\n\n");
+		ahprintf(AH, "SET search_path TO pg_catalog;\n\n");
 	else
-		fprintf(fh, "SET search_path TO '%s', pg_catalog;\n\n", te->namespace);
+		ahprintf(AH, "SET search_path TO '%s', pg_catalog;\n\n", te->namespace);
 }
 
 /*
@@ -616,8 +638,11 @@ set_search_path(ArchiveHandle *AH, TocEntry *te, FILE *fh)
 static void
 write_split_directory(ArchiveHandle *AH)
 {
+	lclContext *ctx;
 	TocEntry *te;
 	FILE *indexFH;
+
+	ctx = (lclContext *) AH->formatData;
 
 	create_sorted_toc(AH);
 
@@ -633,7 +658,6 @@ write_split_directory(ArchiveHandle *AH)
 
 	for (te = AH->toc->next; te != AH->toc; te = te->next)
 	{
-		FILE *fh;
 		lclTocEntry *tctx;
 		const char *filename;
 
@@ -669,25 +693,27 @@ write_split_directory(ArchiveHandle *AH)
 
 		filename = prepend_directory(AH, tctx->filename);
 
-		fh = fopen(filename, "a");
-		if (!fh)
+		/* multiple objects could map to the same file, so open in "append" mode */
+		ctx->dataFH = fopen(filename, "a");
+		if (!ctx->dataFH)
 			exit_horribly(modulename, "could not open file \"%s\": %s\n",
 							filename, strerror(errno));
 
-		set_search_path(AH, te, fh);
+		set_search_path(AH, te);
 
-		fprintf(fh, "%s\n", te->defn);
+		ahprintf(AH, "%s\n", te->defn);
 		
 		/*
 		 * Special case: add \i for BLOBs.  It's ugly to have this here, but there
 		 * really isn't any better place.
 		 */
 		if (strcmp(te->desc, "BLOB") == 0)
-			fprintf(fh, "\\i BLOBS/%s.sql\n\n", te->tag);
+			ahprintf(AH, "\\i BLOBS/%s.sql\n\n", te->tag);
 
-		add_ownership_information(AH, te, fh);
+		add_ownership_information(AH, te);
 
-		fclose(fh);
+		fclose(ctx->dataFH);
+		ctx->dataFH = NULL;
 	}
 
 	fprintf(indexFH, "COMMIT;\n");
