@@ -164,21 +164,22 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	char *namespace = encode_filename(tag);
 
 	create_directory(AH, "%s", namespace);
-	create_directory(AH, "%s/FUNCTIONS", namespace);
-	create_directory(AH, "%s/TABLES", namespace);
-	create_directory(AH, "%s/INDEXES", namespace);
-	create_directory(AH, "%s/SEQUENCES", namespace);
-	create_directory(AH, "%s/VIEWS", namespace);
+	create_directory(AH, "%s/AGGREGATES", namespace);
 	create_directory(AH, "%s/CHECK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/CONSTRAINTS", namespace);
+	create_directory(AH, "%s/INDEXES", namespace);
 	create_directory(AH, "%s/FK_CONSTRAINTS", namespace);
-	create_directory(AH, "%s/TYPES", namespace);
-	create_directory(AH, "%s/TRIGGERS", namespace);
-	create_directory(AH, "%s/AGGREGATES", namespace);
+	create_directory(AH, "%s/FUNCTIONS", namespace);
 	create_directory(AH, "%s/OPERATOR_CLASSES", namespace);
 	create_directory(AH, "%s/OPERATOR_FAMILIES", namespace);
-	create_directory(AH, "%s/TABLEDATA", namespace);
 	create_directory(AH, "%s/RULES", namespace);
+	create_directory(AH, "%s/SEQUENCES", namespace);
+	create_directory(AH, "%s/SERVERS", namespace);
+	create_directory(AH, "%s/TABLEDATA", namespace);
+	create_directory(AH, "%s/TABLES", namespace);
+	create_directory(AH, "%s/TYPES", namespace);
+	create_directory(AH, "%s/TRIGGERS", namespace);
+	create_directory(AH, "%s/VIEWS", namespace);
 }
 
 /*
@@ -875,6 +876,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		{ "OPERATOR CLASS",		"OPERATOR_CLASSES"	},
 		{ "OPERATOR FAMILY",	"OPERATOR_FAMILIES"	},
 		{ "RULE",				"RULES"				},
+		{ "SERVER",				"SERVERS"			},
 		{ "TABLE",				"TABLES"			},
 		{ "TYPE",				"TYPES"				},
 		{ "TRIGGER",			"TRIGGERS"			},
@@ -925,14 +927,15 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		return pg_strdup("dbwide.sql");
 
 	/*
-	 * If some of the DEFAULTs have more complex dependencies, they're just dumped
-	 * into a separate "defaults.sql" file.
+	 * Some of the objects don't have names, so we just dump them into one file.
 	 */
 	if (strcmp(te->desc, "DEFAULT") == 0)
 		return pg_strdup("defaults.sql");
-
 	if (strcmp(te->desc, "CAST") == 0)
 		return pg_strdup("casts.sql");
+	if (strcmp(te->desc, "USER MAPPING") == 0)
+		return pg_strdup("user_mappings.sql");
+
 
 	if (strcmp(te->desc, "OPERATOR") == 0)
 	{
