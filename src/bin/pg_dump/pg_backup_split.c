@@ -50,11 +50,9 @@ static size_t _WriteData(ArchiveHandle *AH, const void *data, size_t dLen);
 static size_t _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len);
 static void _CloseArchive(ArchiveHandle *AH);
 
-static void _StartBlobs(ArchiveHandle *AH, TocEntry *te);
 static void _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
 static size_t _WriteBlobData(ArchiveHandle *AH, const void *data, size_t dLen);
 static void _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid);
-static void _EndBlobs(ArchiveHandle *AH, TocEntry *te);
 
 static size_t _splitOut(ArchiveHandle *AH, const void *buf, size_t len);
 
@@ -106,10 +104,10 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->WriteExtraTocPtr = NULL;
 	AH->PrintExtraTocPtr = NULL;
 
-	AH->StartBlobsPtr = _StartBlobs;
+	AH->StartBlobsPtr = NULL;
 	AH->StartBlobPtr = _StartBlob;
 	AH->EndBlobPtr = _EndBlob;
-	AH->EndBlobsPtr = _EndBlobs;
+	AH->EndBlobsPtr = NULL;
 
 	AH->ClonePtr = NULL;
 	AH->DeClonePtr = NULL;
@@ -316,18 +314,6 @@ _CloseArchive(ArchiveHandle *AH)
  */
 
 /*
- * Called by the archiver when starting to save all BLOB DATA (not schema).
- * It is called just prior to the dumper's DataDumper routine.
- *
- * We don't need to do anything.
- */
-static void
-_StartBlobs(ArchiveHandle *AH, TocEntry *te)
-{
-	/* nothing to do here */
-}
-
-/*
  * Called by the archiver when we're about to start dumping a blob.
  *
  * We create a file to write the blob to.
@@ -390,17 +376,6 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	/* Restore the pointer */
 	AH->WriteDataPtr = _WriteData;
 }
-
-/*
- * Called by the archiver when finishing saving all BLOB DATA.
- *
- * Again, no need to do anything.
- */
-static void
-_EndBlobs(ArchiveHandle *AH, TocEntry *te)
-{
-}
-
 
 
 static int
