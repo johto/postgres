@@ -204,7 +204,8 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
  *
  * It is called just prior to the dumper's 'DataDumper' routine being called.
  *
- * We create the data file for writing.
+ * We create the data file for writing and add any information necessary
+ * for restoring the table data.
  */
 static void
 _StartData(ArchiveHandle *AH, TocEntry *te)
