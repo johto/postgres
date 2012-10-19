@@ -138,7 +138,6 @@ static int	column_inserts = 0;
 static int	no_security_labels = 0;
 static int	no_unlogged_table_data = 0;
 static int	serializable_deferrable = 0;
-static int  split_files = 0;
 
 
 static void help(const char *progname);
@@ -352,7 +351,6 @@ main(int argc, char **argv)
 		{"use-set-session-authorization", no_argument, &use_setsessauth, 1},
 		{"no-security-labels", no_argument, &no_security_labels, 1},
 		{"no-unlogged-table-data", no_argument, &no_unlogged_table_data, 1},
-		{"split", no_argument, &split_files, 1},
 
 		{NULL, 0, NULL, 0}
 	};
@@ -765,7 +763,6 @@ main(int argc, char **argv)
 	ropt->noTablespace = outputNoTablespaces;
 	ropt->disable_triggers = disable_triggers;
 	ropt->use_setsessauth = use_setsessauth;
-    ropt->split_files = split_files;
 
 	if (compressLevel == -1)
 		ropt->compression = 0;
@@ -809,9 +806,8 @@ help(const char *progname)
 
 	printf(_("\nGeneral options:\n"));
 	printf(_("  -f, --file=FILENAME          output file or directory name\n"));
-	printf(_("  -F, --format=c|d|t|p         output file format (custom, directory, tar,\n"
-			 "                               plain text (default))\n"));
-    printf(_("  --split                      split objects into separate plain text files\n"));
+	printf(_("  -F, --format=c|d|t|s|p       output file format (custom, directory, tar,\n"
+			 "                               split directory, plain text (default))\n"));
 	printf(_("  -v, --verbose                verbose mode\n"));
 	printf(_("  -V, --version                output version information, then exit\n"));
 	printf(_("  -Z, --compress=0-9           compression level for compressed formats\n"));
@@ -961,6 +957,8 @@ parseArchiveFormat(const char *format, ArchiveMode *mode)
 		archiveFormat = archTar;
 	else if (pg_strcasecmp(format, "tar") == 0)
 		archiveFormat = archTar;
+	else if (pg_strcasecmp(format, "s") == 0)
+		archiveFormat = archSplit;
 	else if (pg_strcasecmp(format, "split") == 0)
 		archiveFormat = archSplit;
 	else

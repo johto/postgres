@@ -145,7 +145,6 @@ typedef struct _restoreOptions
 	int			number_of_jobs;
 
 	bool	   *idWanted;		/* array showing which dump IDs to emit */
-	int			split_files;		/* --split option, split objects into separate files */
 } RestoreOptions;
 
 /*
