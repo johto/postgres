@@ -131,13 +131,13 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	if (AH->compression != 0)
 		exit_horribly(modulename, "split archive format does not support compression\n");
 
-	ctx->directory = AH->fSpec;
-
 	if (AH->mode != archModeWrite)
         exit_horribly(modulename, "reading a split archive not supported; restore using psql\n");
 
+	ctx->directory = AH->fSpec;
+
 	if (mkdir(ctx->directory, 0700) < 0)
-		exit_horribly(modulename, "could not create directory \"%s\": %s\n",
+	exit_horribly(modulename, "could not create directory \"%s\": %s\n",
 					  ctx->directory, strerror(errno));
 
 	create_directory(AH, "EXTENSIONS");
