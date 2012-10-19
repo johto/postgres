@@ -1034,6 +1034,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 
 			if (te->namespace)
 			{
+				/* must use 2 steps here because encode_filename() is nonreentrant */
 				char *namespace = pg_strdup(encode_filename(te->namespace));
 				snprintf(path, MAXPGPATH, "%s/%s/%s.sql", namespace,
 						 objsubdir, encode_filename(te->tag));
