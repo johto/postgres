@@ -12,10 +12,17 @@ CREATE FUNCTION "tricky"" function()"("tricky"" type()") RETURNS int AS $$ SELEC
 
 ALTER TABLE "tricky"" table()" ALTER COLUMN "tricky"" column()" SET DEFAULT "tricky"" function()"();
 
--- tricky dependency
+-- tricky dependencies
 CREATE TABLE "tricky"" deptable()"(a int);
 CREATE FUNCTION "tricky"" depfunction()"("tricky"" deptable()") RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
 ALTER TABLE "tricky"" deptable()" ALTER COLUMN a SET DEFAULT "tricky"" depfunction()"(NULL);
+ALTER TABLE "tricky"" deptable()" ADD CONSTRAINT acheck CHECK (a <> 747);
+ALTER TABLE "tricky"" deptable()" ADD CONSTRAINT acheck2 CHECK (a > "tricky"" depfunction()"(NULL));
+
+CREATE RULE "tricky"" rule()" AS ON INSERT TO "tricky"" deptable()" DO ALSO INSERT INTO "tricky"" table2()" VALUES (DEFAULT);
+
+CREATE FUNCTION "tricky"" castfunction()"("tricky"" type()") RETURNS text AS $$ SELECT ($1).a::text; $$ LANGUAGE sql;
+CREATE CAST ("tricky"" type()" AS TEXT) WITH FUNCTION "tricky"" castfunction()"("tricky"" type()") AS ASSIGNMENT;
 
 CREATE OR REPLACE FUNCTION first_agg (anyelement, anyelement)
 RETURNS anyelement LANGUAGE sql IMMUTABLE STRICT AS $$ SELECT $1; $$;
