@@ -269,7 +269,7 @@ _EndData(ArchiveHandle *AH, TocEntry *te)
 
 /*
  * Write a buffer of data to the archive.
- * Called by the archiver to write a block of bytes to the TOC or a data file.
+ * Called by the archiver to write a block of bytes to a data file.
  */
 static size_t
 _WriteBuf(ArchiveHandle *AH, const void *buf, size_t len)
