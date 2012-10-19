@@ -35,8 +35,6 @@ typedef struct
 
 	FILE	   *dataFH;			/* currently open data file */
 
-	FILE	   *blobsTocFH;		/* file handle for blobs.toc */
-
 	lclTocEntry **sortedToc;	/* array of toc entires sorted by (filename, dumpId) */
 } lclContext;
 
@@ -123,7 +121,6 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 	AH->formatData = (void *) ctx;
 
 	ctx->dataFH = NULL;
-	ctx->blobsTocFH = NULL;
 	ctx->sortedToc = NULL;
 
 	/* Initialize LO buffering */
@@ -322,21 +319,12 @@ _CloseArchive(ArchiveHandle *AH)
  * Called by the archiver when starting to save all BLOB DATA (not schema).
  * It is called just prior to the dumper's DataDumper routine.
  *
- * We open the large object TOC file here, so that we can append a line to
- * it for each blob.
+ * We don't need to do anything.
  */
 static void
 _StartBlobs(ArchiveHandle *AH, TocEntry *te)
 {
-	lclContext *ctx = (lclContext *) AH->formatData;
-	char	   *fname;
-
-	fname = prepend_directory(AH, "blobs.sql");
-
-	ctx->blobsTocFH = fopen(fname, "ab");
-	if (ctx->blobsTocFH == NULL)
-		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
-					  fname, strerror(errno));
+	/* nothing to do here */
 }
 
 /*
@@ -406,15 +394,11 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 /*
  * Called by the archiver when finishing saving all BLOB DATA.
  *
- * We close the blobs TOC file.
+ * Again, no need to do anything.
  */
 static void
 _EndBlobs(ArchiveHandle *AH, TocEntry *te)
 {
-	lclContext *ctx = (lclContext *) AH->formatData;
-
-	fclose(ctx->blobsTocFH);
-	ctx->blobsTocFH = NULL;
 }
 
 
