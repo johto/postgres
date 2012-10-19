@@ -627,7 +627,7 @@ write_split_directory(ArchiveHandle *AH)
 		if (te->dataDumper)
 			continue;
 
-		/* we need to skip this entry, see _ArchiveEntry() */
+		/*  if there's no filename we need to skip this entry, see _ArchiveEntry() */
 		if (!tctx->filename)
 			continue;
 
