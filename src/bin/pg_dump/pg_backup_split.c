@@ -167,9 +167,9 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/AGGREGATES", namespace);
 	create_directory(AH, "%s/CHECK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/CONSTRAINTS", namespace);
-	create_directory(AH, "%s/INDEXES", namespace);
 	create_directory(AH, "%s/FK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/FUNCTIONS", namespace);
+	create_directory(AH, "%s/INDEXES", namespace);
 	create_directory(AH, "%s/OPERATOR_CLASSES", namespace);
 	create_directory(AH, "%s/OPERATOR_FAMILIES", namespace);
 	create_directory(AH, "%s/RULES", namespace);
