@@ -641,6 +641,7 @@ write_split_directory(ArchiveHandle *AH)
 	lclContext *ctx;
 	TocEntry *te;
 	FILE *indexFH;
+	char buf[512];
 
 	ctx = (lclContext *) AH->formatData;
 
@@ -650,11 +651,14 @@ write_split_directory(ArchiveHandle *AH)
 	if (!indexFH)
 		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
 
-	fprintf(indexFH, "\n-- PostgreSQL split database dump\n\n");
-	fprintf(indexFH, "BEGIN;\n");
-	fprintf(indexFH, "SET client_min_messages TO 'warning';\n");
-	fprintf(indexFH, "SET client_encoding TO '%s';\n", pg_encoding_to_char(AH->public.encoding));
-	fprintf(indexFH, "SET check_function_bodies TO false;\n\n");
+	snprintf(buf, sizeof(buf),	"\n-- PostgreSQL split database dump\n\n"
+								"BEGIN;\n"
+								"SET client_min_messages TO 'warning';\n"
+								"SET client_encoding TO '%s';\n"
+								"SET check_function_bodies TO false;\n\n",
+									pg_encoding_to_char(AH->public.encoding));
+	if (fwrite(buf, 1, strlen(buf), indexFH) != strlen(buf))
+		exit_horribly(modulename, "could not write to index file: %s\n", strerror(errno));
 
 	for (te = AH->toc->next; te != AH->toc; te = te->next)
 	{
@@ -680,7 +684,11 @@ write_split_directory(ArchiveHandle *AH)
 
 		/* add an index entry if necessary */
 		if (should_add_index_entry(AH, te))
-			fprintf(indexFH, "\\i %s\n", tctx->filename);
+		{
+			snprintf(buf, sizeof(buf), "\\i %s\n", tctx->filename);
+			if (fwrite(buf, 1, strlen(buf), indexFH) != strlen(buf))
+				exit_horribly(modulename, "could not write index file: %s\n", strerror(errno));
+		}
 
 		/* 
 		 * Special case: don't try to re-create the "public" schema.  Note that we
@@ -716,7 +724,9 @@ write_split_directory(ArchiveHandle *AH)
 		ctx->dataFH = NULL;
 	}
 
-	fprintf(indexFH, "COMMIT;\n");
+	if (fwrite("COMMIT;\n", 1, 8, indexFH) != 8)
+		exit_horribly(modulename, "could not write index file: %s\n", strerror(errno));
+
 	fclose(indexFH);
 }
 
