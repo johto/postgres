@@ -344,7 +344,7 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	lclContext *ctx = (lclContext *) AH->formatData;
 	char		fname[MAXPGPATH];
 
-	snprintf(fname, MAXPGPATH, "%s/BLOBS/%u.dat", ctx->directory, oid);
+	snprintf(fname, MAXPGPATH, "%s/BLOBS/%u.sql", ctx->directory, oid);
 	ctx->dataFH = fopen(fname, PG_BINARY_W);
 	if (ctx->dataFH == NULL)
 		exit_horribly(modulename, "could not open output file \"%s\": %s\n",
@@ -677,6 +677,13 @@ write_split_directory(ArchiveHandle *AH)
 		set_search_path(AH, te, fh);
 
 		fprintf(fh, "%s\n", te->defn);
+		
+		/*
+		 * Special case: add \i for BLOBs.  It's ugly to have this here, but there
+		 * really isn't any better place.
+		 */
+		if (strcmp(te->desc, "BLOB") == 0)
+			fprintf(fh, "\\i BLOBS/%s.sql\n\n", te->tag);
 
 		add_ownership_information(AH, te, fh);
 
