@@ -331,6 +331,7 @@ _StartBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 
 	ahprintf(AH, "SELECT pg_catalog.lo_open('%u', %d);\n", oid, INV_WRITE);
 
+	/* Substitute a different function to deal with BLOB data */
 	AH->WriteDataPtr = _WriteBlobData;
 }
 
@@ -372,7 +373,7 @@ _EndBlob(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	fclose(ctx->dataFH);
 	ctx->dataFH = NULL;
 
-	/* Restore the pointer */
+	/* Restore the pointer we substituted in _StartBlob() */
 	AH->WriteDataPtr = _WriteData;
 }
 
