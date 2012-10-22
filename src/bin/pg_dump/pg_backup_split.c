@@ -648,7 +648,8 @@ write_split_directory(ArchiveHandle *AH)
 		/* 
 		 * Special case: don't try to re-create the "public" schema.  Note that we
 		 * still need to create the index entry because all schemas use the same
-		 * "dbwide.sql" file, so make sure this happens *after* that.
+		 * "schemaless.sql" file, so make sure that happens before we reach this
+		 * point.
 		 */
 		if (strcmp(te->desc, "SCHEMA") == 0 &&
 			strcmp(te->tag, "public") == 0)
@@ -910,43 +911,31 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	if (strcmp(te->desc, "DATABASE") == 0)
 		return NULL;
 
-	/* for schemas, create the directory */
-	if (strcmp(te->desc, "SCHEMA") == 0)
-		create_schema_directory(AH, te->tag);
-
 	if (strcmp(te->desc, "BLOB") == 0)
 	{
 		snprintf(path, MAXPGPATH, "blobs.sql");
 		return pg_strdup(path);
 	}
 
-	if (strcmp(te->desc, "SCHEMA") == 0 ||
+	/* for schemas, create the directory before dumping the definition */
+	if (strcmp(te->desc, "SCHEMA") == 0)
+		create_schema_directory(AH, te->tag);
+
+	if (strcmp(te->desc, "CAST") == 0 ||
+		strcmp(te->desc, "COLLATION") == 0 ||
+		strcmp(te->desc, "CONVERSION") == 0 ||
+		strcmp(te->desc, "DEFAULT") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
+		strcmp(te->desc, "SCHEMA") == 0 ||
 		strcmp(te->desc, "STDSTRINGS") == 0 ||
-		strcmp(te->desc, "COLLATION") == 0)
-		return pg_strdup("dbwide.sql");
-
-	/*
-	 * Some of the objects don't have names, so we just dump them into one file.
-	 */
-	if (strcmp(te->desc, "DEFAULT") == 0)
-		return pg_strdup("defaults.sql");
-	if (strcmp(te->desc, "CAST") == 0)
-		return pg_strdup("casts.sql");
-	if (strcmp(te->desc, "USER MAPPING") == 0)
-		return pg_strdup("user_mappings.sql");
-
+		strcmp(te->desc, "USER MAPPING") == 0)
+		return pg_strdup("schemaless.sql");
 
 	if (strcmp(te->desc, "OPERATOR") == 0)
 	{
-		if (te->namespace)
-		{
-			snprintf(path, MAXPGPATH, "%s/operators.sql", encode_filename(te->namespace));
-			return pg_strdup(path);
-		}
-		else
-			return pg_strdup("operators.sql");
+		snprintf(path, MAXPGPATH, "%s/operators.sql", encode_filename(te->namespace));
+		return pg_strdup(path);
 	}
 
 	/*
