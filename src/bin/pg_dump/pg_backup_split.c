@@ -229,7 +229,7 @@ _StartData(ArchiveHandle *AH, TocEntry *te)
 
 	/*
 	 * If there's a COPY statement, add it to the beginning of the file.  If there
-	 * isn't one, this must be a --inserts dump.
+	 * isn't one, this must be a --inserts dump and we don't need to add anything.
 	 */
 	if (te->copyStmt)
 		ahprintf(AH, "%s", te->copyStmt);
