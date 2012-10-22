@@ -921,17 +921,26 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	if (strcmp(te->desc, "SCHEMA") == 0)
 		create_schema_directory(AH, te->tag);
 
-	if (strcmp(te->desc, "CAST") == 0 ||
-		strcmp(te->desc, "COLLATION") == 0 ||
-		strcmp(te->desc, "CONVERSION") == 0 ||
-		strcmp(te->desc, "DEFAULT") == 0 ||
+	/* schemaless objects which don't depend on anything */
+	if (strcmp(te->desc, "COLLATION") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
 		strcmp(te->desc, "SCHEMA") == 0 ||
-		strcmp(te->desc, "STDSTRINGS") == 0 ||
-		strcmp(te->desc, "USER MAPPING") == 0)
+		strcmp(te->desc, "STDSTRINGS") == 0)
 		return pg_strdup("schemaless.sql");
 
+	/*
+	 * These objects depend on other objects so they can't be put into
+	 * schemaless.sql.
+	 */
+	if (strcmp(te->desc, "CAST") == 0)
+		return pg_strdup("cast");
+	if (strcmp(te->desc, "CONVERSION") == 0)
+		return pg_strdup("conversions.sql");
+	if (strcmp(te->desc, "DEFAULT") == 0)
+		return pg_strdup("defaults.sql");
+	if (strcmp(te->desc, "USER MAPPING") == 0)
+		return pg_strdup("user_mappings.sql");
 	if (strcmp(te->desc, "OPERATOR") == 0)
 	{
 		snprintf(path, MAXPGPATH, "%s/operators.sql", encode_filename(te->namespace));
