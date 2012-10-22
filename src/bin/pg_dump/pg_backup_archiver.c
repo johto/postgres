@@ -29,8 +29,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
-#include <string.h>
 
 #ifdef WIN32
 #include <io.h>
