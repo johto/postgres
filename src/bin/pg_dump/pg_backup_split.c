@@ -923,7 +923,8 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	if (strcmp(te->desc, "SCHEMA") == 0 ||
 		strcmp(te->desc, "ENCODING") == 0 ||
 		strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
-		strcmp(te->desc, "STDSTRINGS") == 0)
+		strcmp(te->desc, "STDSTRINGS") == 0 ||
+		strcmp(te->desc, "COLLATION") == 0)
 		return pg_strdup("dbwide.sql");
 
 	/*
