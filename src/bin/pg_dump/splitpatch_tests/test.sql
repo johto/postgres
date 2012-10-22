@@ -19,6 +19,9 @@ CREATE FUNCTION "tricky"" function()"("tricky"" type()", basicschema.footype)
 
 SET search_path TO public, pg_catalog;
 
+-- extensions
+CREATE EXTENSION pgcrypto WITH SCHEMA "tricky"" schema()";
+
 -- dependency tests
 CREATE SCHEMA dependency1;
 CREATE SCHEMA dependency2;
