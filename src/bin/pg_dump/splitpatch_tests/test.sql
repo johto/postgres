@@ -19,6 +19,9 @@ CREATE FUNCTION "tricky"" function()"("tricky"" type()", basicschema.footype)
 
 SET search_path TO public, pg_catalog;
 
+-- collations
+CREATE COLLATION "tricky"" collation()" FROM "C";
+
 -- extensions
 CREATE EXTENSION pgcrypto WITH SCHEMA "tricky"" schema()";
 
