@@ -934,7 +934,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	 * schemaless.sql.
 	 */
 	if (strcmp(te->desc, "CAST") == 0)
-		return pg_strdup("cast");
+		return pg_strdup("casts.sql");
 	if (strcmp(te->desc, "CONVERSION") == 0)
 		return pg_strdup("conversions.sql");
 	if (strcmp(te->desc, "DEFAULT") == 0)
