@@ -22,7 +22,7 @@
 typedef struct
 {
 	char	   *filename;		/* filename excluding the directory (basename) */
-	DumpId		dumpId;			/* dump id of the TocEntry */
+	int			dumpOrderId;	/* dump order id */
 } lclTocEntry;
 
 typedef struct
@@ -193,7 +193,7 @@ _ArchiveEntry(ArchiveHandle *AH, TocEntry *te)
 	lclTocEntry *tctx;
 
 	tctx = (lclTocEntry *) pg_malloc0(sizeof(lclTocEntry));
-	tctx->dumpId = te->dumpId;
+	tctx->dumpOrderId = -1;
 	te->formatData = (void *) tctx;
 
 	tctx->filename = get_object_filename(AH, te);
@@ -401,7 +401,7 @@ lclTocEntryCmp(const void *av, const void *bv)
 			return c;
 	}
 
-	return a->dumpId - b->dumpId;
+	return a->dumpOrderId - b->dumpOrderId;
 }
 
 static bool
@@ -458,7 +458,10 @@ create_sorted_toc(ArchiveHandle *AH)
 
 	ctx->sortedToc = (lclTocEntry **) pg_malloc0(sizeof(lclTocEntry *) * AH->tocCount);
 	for (i = 0, te = AH->toc->next; te != AH->toc; i++, te = te->next)
+	{
 		ctx->sortedToc[i] = (lclTocEntry *) te->formatData;
+		((lclTocEntry *) te->formatData)->dumpOrderId = i;
+	}
 
 	qsort(ctx->sortedToc, AH->tocCount, sizeof(lclTocEntry *), lclTocEntryCmp);
 }
