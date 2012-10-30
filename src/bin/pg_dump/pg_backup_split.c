@@ -19,6 +19,10 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+
+/* XXX ugly hack: used by pg_dump.c */
+int incremental_split = 0;
+
 typedef struct
 {
 	char	   *filename;		/* filename excluding the directory (basename) */
@@ -136,12 +140,23 @@ InitArchiveFmt_Split(ArchiveHandle *AH)
 
 	ctx->directory = AH->fSpec;
 
-	if (mkdir(ctx->directory, 0700) < 0)
-		exit_horribly(modulename, "could not create directory \"%s\": %s\n",
-					  ctx->directory, strerror(errno));
+	if (!incremental_split)
+	{
+		if (mkdir(ctx->directory, 0700) < 0)
+			exit_horribly(modulename, "could not create directory \"%s\": %s\n",
+						  ctx->directory, strerror(errno));
 
-	create_directory(AH, "EXTENSIONS");
-	create_directory(AH, "BLOBS");
+		create_directory(AH, "EXTENSIONS");
+		create_directory(AH, "BLOBS");
+	}
+	else
+	{
+		struct stat sb;
+		if (stat(ctx->directory, &sb) != 0)
+			exit_horribly(modulename, "\"%s\" does not exist\n", ctx->directory);
+		if (!S_ISDIR(sb.st_mode))
+			exit_horribly(modulename, "\"%s\" is not a directory\n", ctx->directory);
+	}
 }
 
 /*
@@ -914,7 +929,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	}
 
 	/* for schemas, create the directory before dumping the definition */
-	if (strcmp(te->desc, "SCHEMA") == 0)
+	if (strcmp(te->desc, "SCHEMA") == 0 && !incremental_split)
 		create_schema_directory(AH, te->tag);
 
 	/* schemaless objects which don't depend on anything */
@@ -1031,6 +1046,10 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 
 		return fname;
 	}
+
+	/* in incremental mode, we don't dump views anywhere */
+	if (incremental_split && strcmp(te->desc, "VIEW") == 0)
+		return NULL;
 
 	/* finally, see if it's any of the objects that require no special treatment */
 	for (i = 0; i < sizeof(object_types) / sizeof(object_types[0]); ++i)

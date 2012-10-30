@@ -140,6 +140,10 @@ static int	no_unlogged_table_data = 0;
 static int	serializable_deferrable = 0;
 
 
+/* XXX ugly hack: defined in pg_backup_split.c */
+extern int incremental_split;
+
+
 static void help(const char *progname);
 static void setup_connection(Archive *AH, const char *dumpencoding,
 				 char *use_role);
@@ -352,6 +356,7 @@ main(int argc, char **argv)
 		{"use-set-session-authorization", no_argument, &use_setsessauth, 1},
 		{"no-security-labels", no_argument, &no_security_labels, 1},
 		{"no-unlogged-table-data", no_argument, &no_unlogged_table_data, 1},
+		{"incremental-split", no_argument, &incremental_split, 1},
 
 		{NULL, 0, NULL, 0}
 	};
@@ -558,6 +563,10 @@ main(int argc, char **argv)
 	/* archiveFormat specific setup */
 	if (archiveFormat == archNull)
 		plainText = 1;
+
+	/* incremental dump only supported by archSplit */
+	if (incremental_split && archiveFormat != archSplit)
+		exit_horribly(NULL, "incremental-split option is only supported by the split dump format\n");
 
 	/* Custom and directory formats are compressed by default, others not */
 	if (compressLevel == -1)
@@ -846,6 +855,8 @@ help(const char *progname)
 	printf(_("  --use-set-session-authorization\n"
 			 "                               use SET SESSION AUTHORIZATION commands instead of\n"
 			 "                               ALTER OWNER commands to set ownership\n"));
+	printf(_("  --incremental-split          do an incremental split into an existing\n"
+			 "                               directory\n"));
 
 	printf(_("\nConnection options:\n"));
 	printf(_("  -h, --host=HOSTNAME      database server host or socket directory\n"));
