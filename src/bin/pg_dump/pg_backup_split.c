@@ -39,7 +39,7 @@ typedef struct
 
 	FILE	   *dataFH;			/* currently open data file */
 
-	lclTocEntry **sortedToc;	/* array of toc entires sorted by (filename, dumpId) */
+	lclTocEntry **sortedToc;	/* array of toc entires sorted by (filename, dumpOrderId) */
 } lclContext;
 
 /* translator: this is a module name */
@@ -467,8 +467,8 @@ should_add_index_entry(ArchiveHandle *AH, TocEntry *te)
 }
 
 /*
- * Create a list of lclTocEntries sorted by (filename, dumpId).  This list is
- * used when creating the index file to make sure we don't include a file
+ * Create a list of lclTocEntries sorted by (filename, dumpOrderId).  This list
+ * is used when creating the index file to make sure we don't include a file
  * multiple times.
  */
 static void
