@@ -605,7 +605,6 @@ write_split_directory(ArchiveHandle *AH)
 		exit_horribly(modulename, "could not open index.sql: %s\n", strerror(errno));
 
 	snprintf(buf, sizeof(buf),	"\n-- PostgreSQL split database dump\n\n"
-								"BEGIN;\n"
 								"SET client_min_messages TO 'warning';\n"
 								"SET client_encoding TO '%s';\n"
 								"SET check_function_bodies TO false;\n\n",
@@ -679,9 +678,6 @@ write_split_directory(ArchiveHandle *AH)
 		fclose(ctx->dataFH);
 		ctx->dataFH = NULL;
 	}
-
-	if (fwrite("COMMIT;\n", 1, 8, indexFH) != 8)
-		exit_horribly(modulename, "could not write index file: %s\n", strerror(errno));
 
 	fclose(indexFH);
 }
