@@ -659,6 +659,14 @@ write_split_directory(ArchiveHandle *AH)
 				exit_horribly(modulename, "could not write index file: %s\n", strerror(errno));
 		}
 
+		/*
+		 * In incremental split dump mode, we don't want to dump the view definitions
+		 * in any case.  But we do still want the index entries, so this is the place
+		 * to stop processing views.
+		 */
+		if (incremental_split && strcmp(te->desc, "VIEW") == 0)
+			continue;
+
 		/* 
 		 * Special case: don't try to re-create the "public" schema.  Note that we
 		 * still need to create the index entry because all schemas use the same
@@ -974,6 +982,10 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		depctx = (lclTocEntry *) depte->formatData;
 		if (!depctx)
 			exit_horribly(modulename, "unexpected NULL formatData\n");
+		
+		/* in incremental split dump mode, don't dump anything that depends on a view */
+		if (incremental_split && strcmp(depte->desc, "VIEW") == 0)
+			return NULL;
 
 		/* no need to strdup() */
 		return depctx->filename;
@@ -1046,10 +1058,6 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 
 		return fname;
 	}
-
-	/* in incremental mode, we don't dump views anywhere */
-	if (incremental_split && strcmp(te->desc, "VIEW") == 0)
-		return NULL;
 
 	/* finally, see if it's any of the objects that require no special treatment */
 	for (i = 0; i < sizeof(object_types) / sizeof(object_types[0]); ++i)
