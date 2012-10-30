@@ -178,6 +178,20 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 {
 	char *namespace = encode_filename(tag);
 
+	/*
+	 * In incremental split dump mode only try to create the directory for a
+	 * schema if it doesn't already exist.
+	 */
+	if (incremental_split)
+	{
+		char *directory = prepend_directory(AH, namespace);
+		struct stat sb;
+
+		if (stat(directory, &sb) == 0 &&
+			S_ISDIR(sb.st_mode))
+			return;
+	}
+
 	create_directory(AH, "%s", namespace);
 	create_directory(AH, "%s/AGGREGATES", namespace);
 	create_directory(AH, "%s/CHECK_CONSTRAINTS", namespace);
@@ -948,7 +962,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 	}
 
 	/* for schemas, create the directory before dumping the definition */
-	if (strcmp(te->desc, "SCHEMA") == 0 && !incremental_split)
+	if (strcmp(te->desc, "SCHEMA") == 0)
 		create_schema_directory(AH, te->tag);
 
 	/* schemaless objects which don't depend on anything */
