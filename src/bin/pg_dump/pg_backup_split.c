@@ -631,6 +631,7 @@ write_split_directory(ArchiveHandle *AH)
 	{
 		lclTocEntry *tctx;
 		const char *filename;
+		bool add_entry;
 
 		tctx = (lclTocEntry *) te->formatData;
 
@@ -652,7 +653,8 @@ write_split_directory(ArchiveHandle *AH)
 			continue;
 
 		/* add an index entry if necessary */
-		if (should_add_index_entry(AH, te))
+		add_entry = should_add_index_entry(AH, te);
+		if (add_entry)
 		{
 			snprintf(buf, sizeof(buf), "\\i %s\n", tctx->filename);
 			if (fwrite(buf, 1, strlen(buf), indexFH) != strlen(buf))
@@ -682,8 +684,14 @@ write_split_directory(ArchiveHandle *AH)
 
 		filename = prepend_directory(AH, tctx->filename);
 
-		/* multiple objects could map to the same file, so open in "append" mode */
-		ctx->dataFH = fopen(filename, "a");
+		/*
+		 * Multiple objects can map to the same file, so open in "append" mode after
+		 * the first such object has been processed.
+		 */
+		if (add_entry)
+			ctx->dataFH = fopen(filename, "w");
+		else
+			ctx->dataFH = fopen(filename, "a");
 		if (!ctx->dataFH)
 			exit_horribly(modulename, "could not open file \"%s\": %s\n",
 							filename, strerror(errno));
