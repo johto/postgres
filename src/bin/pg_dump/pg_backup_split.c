@@ -663,6 +663,9 @@ write_split_directory(ArchiveHandle *AH)
 		 * In incremental split dump mode, we don't want to dump the view definitions
 		 * in any case.  But we do still want the index entries, so this is the place
 		 * to stop processing views.
+		 *
+		 * Any object depending on a view is handled in get_object_filename, so we
+		 * don't have to worry about that here.
 		 */
 		if (incremental_split && strcmp(te->desc, "VIEW") == 0)
 			continue;
