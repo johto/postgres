@@ -138,6 +138,7 @@ static int	column_inserts = 0;
 static int	no_security_labels = 0;
 static int	no_unlogged_table_data = 0;
 static int	serializable_deferrable = 0;
+static int	pretty_print_views = 0;
 
 
 /* XXX ugly hack: defined in pg_backup_split.c */
@@ -357,6 +358,7 @@ main(int argc, char **argv)
 		{"no-security-labels", no_argument, &no_security_labels, 1},
 		{"no-unlogged-table-data", no_argument, &no_unlogged_table_data, 1},
 		{"incremental-split", no_argument, &incremental_split, 1},
+		{"pretty-print-views", no_argument, &pretty_print_views, 1},
 
 		{NULL, 0, NULL, 0}
 	};
@@ -615,6 +617,12 @@ main(int argc, char **argv)
 		no_security_labels = 1;
 
 	/*
+	 * Pretty-printing views requires PostgreSQL 7.4 or later
+	 */
+	if (pretty_print_views && fout->remoteVersion < 70400)
+		exit_horribly(NULL, "--pretty-print-views requires server version 7.4 or later\n");
+
+	/*
 	 * Start transaction-snapshot mode transaction to dump consistent data.
 	 */
 	ExecuteSqlStatement(fout, "BEGIN");
@@ -857,6 +865,9 @@ help(const char *progname)
 			 "                               ALTER OWNER commands to set ownership\n"));
 	printf(_("  --incremental-split          do an incremental split into an existing\n"
 			 "                               directory\n"));
+	printf(_("  --pretty-print-views\n"
+			 "                               dump views using a more human-readable format (reduces\n"
+			 "                               compatibility of the output dump)\n"));
 
 	printf(_("\nConnection options:\n"));
 	printf(_("  -h, --host=HOSTNAME      database server host or socket directory\n"));
@@ -12341,7 +12352,13 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 		reltypename = "VIEW";
 
 		/* Fetch the view definition */
-		if (fout->remoteVersion >= 70300)
+		if (pretty_print_views)
+		{
+			appendPQExpBuffer(query,
+							  "SELECT pg_catalog.pg_get_viewdef('%u'::pg_catalog.oid, TRUE) AS viewdef",
+							  tbinfo->dobj.catId.oid);
+		}
+		else if (fout->remoteVersion >= 70300)
 		{
 			/* Beginning in 7.3, viewname is not unique; rely on OID */
 			appendPQExpBuffer(query,
