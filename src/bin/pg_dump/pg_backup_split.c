@@ -167,6 +167,7 @@ create_schema_directory(ArchiveHandle *AH, const char *tag)
 	create_directory(AH, "%s/AGGREGATES", namespace);
 	create_directory(AH, "%s/CHECK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/CONSTRAINTS", namespace);
+	create_directory(AH, "%s/DOMAINS", namespace);
 	create_directory(AH, "%s/FK_CONSTRAINTS", namespace);
 	create_directory(AH, "%s/FUNCTIONS", namespace);
 	create_directory(AH, "%s/INDEXES", namespace);
@@ -869,6 +870,7 @@ get_object_filename(ArchiveHandle *AH, TocEntry *te)
 		{ "AGGREGATE",			"AGGREGATES"		},
 		{ "CHECK CONSTRAINT",	"CHECK_CONSTRAINTS" },
 		{ "CONSTRAINT",			"CONSTRAINTS"		},
+        { "DOMAIN",             "DOMAINS"           },
 		{ "EXTENSION",			"EXTENSIONS"		},
 		{ "FK CONSTRAINT",		"FK_CONSTRAINTS"	},
 		{ "INDEX",				"INDEXES"			},
