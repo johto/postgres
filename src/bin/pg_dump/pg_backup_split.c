@@ -573,6 +573,10 @@ add_ownership_information(ArchiveHandle *AH, TocEntry *te)
 {
 	PQExpBuffer temp;
 
+    /* skip ownership information if --no-owner is specified */
+    if (AH->ropt && AH->ropt->noOwner)
+        return;
+
 	/* skip objects that don't have an owner */
 	if (strcmp(te->desc, "ACL") == 0 ||
 		strcmp(te->desc, "CAST") == 0 ||
