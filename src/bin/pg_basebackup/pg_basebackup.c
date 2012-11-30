@@ -43,6 +43,7 @@ char	   *label = "pg_basebackup base backup";
 bool		showprogress = false;
 int			verbose = 0;
 int			compresslevel = 0;
+bool		writebackupfile = false;
 bool		includewal = false;
 bool		streamwal = false;
 bool		fastcheckpoint = false;
@@ -107,6 +108,8 @@ usage(void)
 	printf(_("\nOptions controlling the output:\n"));
 	printf(_("  -D, --pgdata=DIRECTORY receive base backup into directory\n"));
 	printf(_("  -F, --format=p|t       output format (plain (default), tar)\n"));
+	printf(_("  -B, --write-backup-file\n"
+			 "                         write a backup file\n"));
 	printf(_("  -x, --xlog             include required WAL files in backup (fetch mode)\n"));
 	printf(_("  -X, --xlog-method=fetch|stream\n"
 			 "                         include required WAL files with specified method\n"));
@@ -1229,6 +1232,13 @@ BaseBackup(void)
 	PQclear(res);
 	PQfinish(conn);
 
+	if (writebackupfile)
+	{
+		FILE *fh = fopen("backupfilelol", "w");
+		fprintf(fh, "%s and %s\n", xlogstart, xlogend);
+		fclose(fh);
+	}
+
 	if (verbose)
 		fprintf(stderr, "%s: base backup completed\n", progname);
 }
@@ -1243,6 +1253,7 @@ main(int argc, char **argv)
 		{"pgdata", required_argument, NULL, 'D'},
 		{"format", required_argument, NULL, 'F'},
 		{"checkpoint", required_argument, NULL, 'c'},
+		{"write-backup-file", no_argument, NULL, 'B'},
 		{"xlog", no_argument, NULL, 'x'},
 		{"xlog-method", required_argument, NULL, 'X'},
 		{"gzip", no_argument, NULL, 'z'},
@@ -1336,6 +1347,9 @@ main(int argc, char **argv)
 							progname, optarg);
 					exit(1);
 				}
+				break;
+			case 'B':
+				writebackupfile = true;
 				break;
 			case 'l':
 				label = pg_strdup(optarg);
