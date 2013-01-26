@@ -3338,23 +3338,24 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		exec_eval_cleanup(estate);
 		SPI_freetuptable(SPI_tuptable);
 	}
-	else if (stmt->strict)
-	{
-		/*
-		 * If a mod stmt specified STRICT, and the query didn't find
-		 * exactly one row, throw an error.
-		 */
-		if (SPI_processed == 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_NO_DATA_FOUND),
-					 errmsg("query returned no rows")));
-		else if (SPI_processed > 1)
-			ereport(ERROR,
-					(errcode(ERRCODE_TOO_MANY_ROWS),
-					 errmsg("query returned more than one row")));
-	}
 	else
 	{
+		if (stmt->strict)
+		{
+			/*
+		 	 * If a mod stmt specified STRICT, and the query didn't find
+			 * exactly one row, throw an error.
+			 */
+			if (SPI_processed == 0)
+				ereport(ERROR,
+						(errcode(ERRCODE_NO_DATA_FOUND),
+						 errmsg("query returned no rows")));
+			else if (SPI_processed > 1)
+				ereport(ERROR,
+						(errcode(ERRCODE_TOO_MANY_ROWS),
+						 errmsg("query returned more than one row")));
+		}
+
 		/* If the statement returned a tuple table, complain */
 		if (SPI_tuptable != NULL)
 			ereport(ERROR,
