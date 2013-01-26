@@ -1500,12 +1500,9 @@ static int
 exec_stmt_perform(PLpgSQL_execstate *estate, PLpgSQL_stmt_perform *stmt)
 {
 	PLpgSQL_expr *expr = stmt->expr;
-	uint32 n;
 
 	(void) exec_run_select(estate, expr, 0, NULL);
-	n = estate->eval_processed;
-
-	exec_set_found(estate, (n != 0));
+	exec_set_found(estate, (estate->eval_processed != 0));
 	exec_eval_cleanup(estate);
 
 	return PLPGSQL_RC_OK;
