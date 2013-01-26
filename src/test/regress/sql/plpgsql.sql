@@ -2590,7 +2590,6 @@ select footest();
 --
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should work
   strict select 1;
@@ -2599,7 +2598,6 @@ end$$ language plpgsql;
 select footest();
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should fail, no rows
   strict select 1 where false;
@@ -2608,7 +2606,6 @@ end$$ language plpgsql;
 select footest();
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should fail, too many rows
   strict select 1 from generate_series(1,2);
@@ -2617,7 +2614,6 @@ end$$ language plpgsql;
 select footest();
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should work
   strict insert into foo values(5,6);
@@ -2626,7 +2622,6 @@ end$$ language plpgsql;
 select footest();
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should fail, no rows
   strict insert into foo values(5,6) limit 0;
@@ -2635,10 +2630,17 @@ end$$ language plpgsql;
 select footest();
 
 create or replace function footest() returns void as $$
-declare x record;
 begin
   -- should fail, too many rows
   strict insert into foo values(5,6),(7,8);
+end$$ language plpgsql;
+
+select footest();
+
+create or replace function footest() returns void as $$
+begin
+  -- should fail, no INTO
+  strict insert into foo values(5,6) returning *;
 end$$ language plpgsql;
 
 select footest();
