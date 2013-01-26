@@ -375,7 +375,6 @@ typedef struct
 {								/* PERFORM statement		*/
 	int			cmd_type;
 	int			lineno;
-	bool		strict;
 	PLpgSQL_expr *expr;
 } PLpgSQL_stmt_perform;
 
