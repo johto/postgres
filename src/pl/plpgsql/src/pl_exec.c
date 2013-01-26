@@ -3204,10 +3204,10 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 	paramLI = setup_param_list(estate, expr);
 
 	/*
-	 * If we have INTO, then we only need one row back ... but if we have INTO
+	 * If we have INTO, then we only need one row back ... but if we have
 	 * STRICT, ask for two rows, so that we can verify the statement returns
 	 * only one.  INSERT/UPDATE/DELETE are always treated strictly. Without
-	 * INTO, just run the statement to completion (tcount = 0).
+	 * INTO or STRICT, just run the statement to completion (tcount = 0).
 	 *
 	 * We could just ask for two rows always when using INTO, but there are
 	 * some cases where demanding the extra row costs significant time, eg by
@@ -3343,7 +3343,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		if (stmt->strict)
 		{
 			/*
-		 	 * If a mod stmt specified STRICT, and the query didn't find
+		 	 * If a statement specified STRICT, and the query didn't find
 			 * exactly one row, throw an error.
 			 */
 			if (SPI_processed == 0)
@@ -3356,12 +3356,24 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 						 errmsg("query returned more than one row")));
 		}
 
-		/* If the statement returned a tuple table, complain */
+		/*
+		 * If the statement returned a tuple table, complain, unless it's a
+		 * STRICT SELECT statement.
+		 * */
 		if (SPI_tuptable != NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("query has no destination for result data"),
-					 (rc == SPI_OK_SELECT) ? errhint("If you want to discard the results of a SELECT, use PERFORM instead.") : 0));
+		{
+			if (stmt->strict && rc == SPI_OK_SELECT)
+			{
+				/* Clean up */
+				exec_eval_cleanup(estate);
+				SPI_freetuptable(SPI_tuptable);
+			}
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("query has no destination for result data"),
+						 (rc == SPI_OK_SELECT) ? errhint("If you want to discard the results of a SELECT, use PERFORM instead.") : 0));
+		}
 	}
 
 	if (paramLI)
