@@ -1072,6 +1072,23 @@ BEGIN
             RAISE EXCEPTION 'employee % not unique', myname;
 END;
 </programlisting>
+	</para>
+
+    <para>
+     If you're not interested in the results of the query, but you want
+     to enforce that exactly one row was affected, you can use
+     <literal>STRICT</> at the beginning of the SQL statement,
+     for example:
+
+<programlisting>
+STRICT UPDATE emp SET last_seen = current_date WHERE empname = myname;
+</programlisting>
+
+     If <literal>STRICT</> is specified at the beginning of the statement,
+     an <literal>INTO</> clause must not be present.
+    </para>
+
+    <para>
      Successful execution of a command with <literal>STRICT</>
      always sets <literal>FOUND</literal> to true.
     </para>
