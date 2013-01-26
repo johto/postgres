@@ -1504,14 +1504,6 @@ exec_stmt_perform(PLpgSQL_execstate *estate, PLpgSQL_stmt_perform *stmt)
 
 	(void) exec_run_select(estate, expr, 0, NULL);
 	n = estate->eval_processed;
-	if (stmt->strict && n == 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_NO_DATA_FOUND),
-				 errmsg("query returned no rows")));
-	else if (stmt->strict && n > 1)
-		ereport(ERROR,
-				(errcode(ERRCODE_TOO_MANY_ROWS),
-				 errmsg("query returned more than one row")));
 
 	exec_set_found(estate, (n != 0));
 	exec_eval_cleanup(estate);
