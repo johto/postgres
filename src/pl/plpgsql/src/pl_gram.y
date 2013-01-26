@@ -77,7 +77,8 @@ static	PLpgSQL_expr	*read_sql_expression2(int until, int until2,
 											  int *endtoken);
 static	PLpgSQL_expr	*read_sql_stmt(const char *sqlstart);
 static	PLpgSQL_type	*read_datatype(int tok);
-static	PLpgSQL_stmt	*make_execsql_stmt(int firsttoken, int location);
+static	PLpgSQL_stmt	*make_execsql_stmt(int firsttoken, int location,
+										   bool have_strict);
 static	PLpgSQL_stmt_fetch *read_fetch_direction(void);
 static	void			 complete_direction(PLpgSQL_stmt_fetch *fetch,
 											bool *check_FROM);
@@ -178,7 +179,7 @@ static	List			*read_raise_options(void);
 %type <expr>	expr_until_semi expr_until_rightbracket
 %type <expr>	expr_until_then expr_until_loop opt_expr_until_when
 %type <expr>	opt_exitcond
-%type <boolean> opt_strict
+/*%type <boolean> opt_strict*/
 
 %type <ival>	assign_var foreach_slice
 %type <var>		cursor_variable
@@ -835,15 +836,14 @@ proc_stmt		: pl_block ';'
 						{ $$ = $1; }
 				;
 
-stmt_perform	: K_PERFORM opt_strict expr_until_semi
+stmt_perform	: K_PERFORM expr_until_semi
 					{
 						PLpgSQL_stmt_perform *new;
 
 						new = palloc0(sizeof(PLpgSQL_stmt_perform));
 						new->cmd_type = PLPGSQL_STMT_PERFORM;
 						new->lineno   = plpgsql_location_to_lineno(@1);
-						new->strict = $2;
-						new->expr  = $3;
+						new->expr  = $2;
 
 						$$ = (PLpgSQL_stmt *)new;
 					}
@@ -1784,7 +1784,14 @@ loop_body		: proc_sect K_END K_LOOP opt_label ';'
  */
 stmt_execsql	: K_INSERT
 					{
-						$$ = make_execsql_stmt(K_INSERT, @1);
+						$$ = make_execsql_stmt(K_INSERT, @1, false);
+					}
+				| K_STRICT
+					{
+						int tok;
+
+						tok = yylex();
+						$$ = make_execsql_stmt(tok, yylloc, true);
 					}
 				| T_WORD
 					{
@@ -1794,7 +1801,7 @@ stmt_execsql	: K_INSERT
 						plpgsql_push_back_token(tok);
 						if (tok == '=' || tok == COLON_EQUALS || tok == '[')
 							word_is_not_variable(&($1), @1);
-						$$ = make_execsql_stmt(T_WORD, @1);
+						$$ = make_execsql_stmt(T_WORD, @1, false);
 					}
 				| T_CWORD
 					{
@@ -1804,7 +1811,7 @@ stmt_execsql	: K_INSERT
 						plpgsql_push_back_token(tok);
 						if (tok == '=' || tok == COLON_EQUALS || tok == '[')
 							cword_is_not_variable(&($1), @1);
-						$$ = make_execsql_stmt(T_CWORD, @1);
+						$$ = make_execsql_stmt(T_CWORD, @1, false);
 					}
 				;
 
@@ -2208,15 +2215,6 @@ opt_exitcond	: ';'
 				| K_WHEN expr_until_semi
 					{ $$ = $2; }
 				;
-
-opt_strict		:
-					{
-						$$ = false;
-					}
-				| K_STRICT
-					{
-						$$ = true;
-					}
 
 /*
  * need to allow DATUM because scanner will have tried to resolve as variable
@@ -2642,7 +2640,7 @@ read_datatype(int tok)
 }
 
 static PLpgSQL_stmt *
-make_execsql_stmt(int firsttoken, int location)
+make_execsql_stmt(int firsttoken, int location, bool have_strict)
 {
 	StringInfoData		ds;
 	IdentifierLookup	save_IdentifierLookup;
@@ -2653,7 +2651,6 @@ make_execsql_stmt(int firsttoken, int location)
 	int					tok;
 	int					prev_tok;
 	bool				have_into = false;
-	bool				have_strict = false;
 	int					into_start_loc = -1;
 	int					into_end_loc = -1;
 
@@ -2676,18 +2673,12 @@ make_execsql_stmt(int firsttoken, int location)
 	{
 		prev_tok = tok;
 		tok = yylex();
-		if ((have_strict || have_into) && into_end_loc < 0)
-			into_end_loc = yylloc;		/* token after the INTO (or STRICT) part */
+		if (have_into && into_end_loc < 0)
+			into_end_loc = yylloc;		/* token after the INTO part */
 		if (tok == ';')
 			break;
 		if (tok == 0)
 			yyerror("unexpected end of function definition");
-
-		if (tok == K_STRICT)
-		{
-			into_start_loc = yylloc;
-			have_strict = true;
-		}
 
 		if (tok == K_INTO && prev_tok != K_INSERT)
 		{
@@ -2705,7 +2696,7 @@ make_execsql_stmt(int firsttoken, int location)
 
 	plpgsql_IdentifierLookup = save_IdentifierLookup;
 
-	if (have_strict || have_into)
+	if (have_into)
 	{
 		/*
 		 * Insert an appropriate number of spaces corresponding to the
