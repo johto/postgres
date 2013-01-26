@@ -3103,6 +3103,69 @@ end$$ language plpgsql;
 select footest();
 ERROR:  query returned more than one row
 CONTEXT:  PL/pgSQL function footest() line 5 at EXECUTE statement
+--
+-- Test STRICT without INTO
+--
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should work
+  strict select 1;
+end$$ language plpgsql;
+select footest();
+ footest 
+---------
+ 
+(1 row)
+
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should fail, no rows
+  strict select 1 where false;
+end$$ language plpgsql;
+select footest();
+ERROR:  query returned no rows
+CONTEXT:  PL/pgSQL function footest() line 5 at SQL statement
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should fail, too many rows
+  strict select 1 from generate_series(1,2);
+end$$ language plpgsql;
+select footest();
+ERROR:  query returned more than one row
+CONTEXT:  PL/pgSQL function footest() line 5 at SQL statement
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should work
+  strict insert into foo values(5,6);
+end$$ language plpgsql;
+select footest();
+ footest 
+---------
+ 
+(1 row)
+
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should fail, no rows
+  strict insert into foo values(5,6) limit 0;
+end$$ language plpgsql;
+select footest();
+ERROR:  query returned no rows
+CONTEXT:  PL/pgSQL function footest() line 5 at SQL statement
+create or replace function footest() returns void as $$
+declare x record;
+begin
+  -- should fail, too many rows
+  strict insert into foo values(5,6),(7,8);
+end$$ language plpgsql;
+select footest();
+ERROR:  query returned more than one row
+CONTEXT:  PL/pgSQL function footest() line 5 at SQL statement
 drop function footest();
 -- test scrollable cursor support
 create function sc_test() returns setof integer as $$
