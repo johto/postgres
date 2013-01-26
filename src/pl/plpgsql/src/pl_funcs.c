@@ -1187,7 +1187,7 @@ static void
 dump_perform(PLpgSQL_stmt_perform *stmt)
 {
 	dump_ind();
-	printf("PERFORM expr = ");
+	printf("PERFORM%s expr = ", stmt->strict ? " STRICT" : "");
 	dump_expr(stmt->expr);
 	printf("\n");
 }

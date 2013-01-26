@@ -178,6 +178,7 @@ static	List			*read_raise_options(void);
 %type <expr>	expr_until_semi expr_until_rightbracket
 %type <expr>	expr_until_then expr_until_loop opt_expr_until_when
 %type <expr>	opt_exitcond
+%type <boolean> opt_strict
 
 %type <ival>	assign_var foreach_slice
 %type <var>		cursor_variable
@@ -834,14 +835,15 @@ proc_stmt		: pl_block ';'
 						{ $$ = $1; }
 				;
 
-stmt_perform	: K_PERFORM expr_until_semi
+stmt_perform	: K_PERFORM opt_strict expr_until_semi
 					{
 						PLpgSQL_stmt_perform *new;
 
 						new = palloc0(sizeof(PLpgSQL_stmt_perform));
 						new->cmd_type = PLPGSQL_STMT_PERFORM;
 						new->lineno   = plpgsql_location_to_lineno(@1);
-						new->expr  = $2;
+						new->strict = $2;
+						new->expr  = $3;
 
 						$$ = (PLpgSQL_stmt *)new;
 					}
@@ -2207,6 +2209,15 @@ opt_exitcond	: ';'
 					{ $$ = $2; }
 				;
 
+opt_strict		:
+					{
+						$$ = false;
+					}
+				| K_STRICT
+					{
+						$$ = true;
+					}
+
 /*
  * need to allow DATUM because scanner will have tried to resolve as variable
  */
@@ -2665,15 +2676,23 @@ make_execsql_stmt(int firsttoken, int location)
 	{
 		prev_tok = tok;
 		tok = yylex();
-		if (have_into && into_end_loc < 0)
-			into_end_loc = yylloc;		/* token after the INTO part */
+		if ((have_strict || have_into) && into_end_loc < 0)
+			into_end_loc = yylloc;		/* token after the INTO (or STRICT) part */
 		if (tok == ';')
 			break;
 		if (tok == 0)
 			yyerror("unexpected end of function definition");
 
+		if (tok == K_STRICT)
+		{
+			into_start_loc = yylloc;
+			have_strict = true;
+		}
+
 		if (tok == K_INTO && prev_tok != K_INSERT)
 		{
+			if (have_strict)
+				yyerror("STRICT must be part of INTO clause of INTO is specified");
 			if (have_into)
 				yyerror("INTO specified more than once");
 			have_into = true;
@@ -2686,7 +2705,7 @@ make_execsql_stmt(int firsttoken, int location)
 
 	plpgsql_IdentifierLookup = save_IdentifierLookup;
 
-	if (have_into)
+	if (have_strict || have_into)
 	{
 		/*
 		 * Insert an appropriate number of spaces corresponding to the
