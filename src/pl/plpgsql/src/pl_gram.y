@@ -179,7 +179,6 @@ static	List			*read_raise_options(void);
 %type <expr>	expr_until_semi expr_until_rightbracket
 %type <expr>	expr_until_then expr_until_loop opt_expr_until_when
 %type <expr>	opt_exitcond
-/*%type <boolean> opt_strict*/
 
 %type <ival>	assign_var foreach_slice
 %type <var>		cursor_variable
