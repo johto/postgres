@@ -512,8 +512,9 @@ pg_get_viewdef(PG_FUNCTION_ARGS)
 {
 	/* By OID */
 	Oid			viewoid = PG_GETARG_OID(0);
+	int			prettyFlags = PRETTYFLAG_INDENT;
 
-	PG_RETURN_TEXT_P(string_to_text(pg_get_viewdef_worker(viewoid, 0, -1)));
+	PG_RETURN_TEXT_P(string_to_text(pg_get_viewdef_worker(viewoid, prettyFlags, -1)));
 }
 
 
@@ -525,7 +526,7 @@ pg_get_viewdef_ext(PG_FUNCTION_ARGS)
 	bool		pretty = PG_GETARG_BOOL(1);
 	int			prettyFlags;
 
-	prettyFlags = pretty ? PRETTYFLAG_PAREN | PRETTYFLAG_INDENT : 0;
+	prettyFlags = pretty ? PRETTYFLAG_PAREN | PRETTYFLAG_INDENT : PRETTYFLAG_INDENT;
 	PG_RETURN_TEXT_P(string_to_text(pg_get_viewdef_worker(viewoid, prettyFlags, WRAP_COLUMN_DEFAULT)));
 }
 
