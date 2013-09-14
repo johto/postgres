@@ -36,6 +36,7 @@ static const struct config_enum_entry variable_conflict_options[] = {
 };
 
 int			plpgsql_variable_conflict = PLPGSQL_RESOLVE_ERROR;
+bool		plpgsql_enable_assertions = false;
 
 /* Hook for plugins */
 PLpgSQL_plugin **plugin_ptr = NULL;
@@ -65,6 +66,15 @@ _PG_init(void)
 							 variable_conflict_options,
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("plpgsql.enable_assertions",
+							 gettext_noop("Enables assertions in PL/PgSQL functions."),
+							 NULL,
+							 &plpgsql_enable_assertions,
+							 false,
+							 PGC_USERSET, 0,
+							 NULL, NULL, NULL);
+
 
 	EmitWarningsOnPlaceholders("plpgsql");
 

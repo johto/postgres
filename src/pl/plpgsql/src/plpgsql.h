@@ -100,7 +100,8 @@ enum PLpgSQL_stmt_types
 	PLPGSQL_STMT_OPEN,
 	PLPGSQL_STMT_FETCH,
 	PLPGSQL_STMT_CLOSE,
-	PLPGSQL_STMT_PERFORM
+	PLPGSQL_STMT_PERFORM,
+	PLPGSQL_STMT_ASSERT
 };
 
 
@@ -402,6 +403,13 @@ typedef struct
 	bool		is_stacked;		/* STACKED or CURRENT diagnostics area? */
 	List	   *diag_items;		/* List of PLpgSQL_diag_item */
 } PLpgSQL_stmt_getdiag;
+
+typedef struct
+{								/* ASSERT statement */
+	int			cmd_type;
+	int			lineno;
+	PLpgSQL_expr *expr;
+} PLpgSQL_stmt_assert;
 
 
 typedef struct
@@ -736,6 +744,7 @@ typedef struct PLpgSQL_function
 	int			tg_tag_varno;
 
 	PLpgSQL_resolve_option resolve_option;
+	bool		enable_assertions;
 
 	int			ndatums;
 	PLpgSQL_datum **datums;
@@ -872,6 +881,8 @@ typedef enum
 extern IdentifierLookup plpgsql_IdentifierLookup;
 
 extern int	plpgsql_variable_conflict;
+
+extern bool plpgsql_enable_assertions;
 
 extern bool plpgsql_check_syntax;
 extern bool plpgsql_DumpExecTree;

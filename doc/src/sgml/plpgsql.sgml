@@ -3528,6 +3528,69 @@ RAISE unique_violation USING MESSAGE = 'Duplicate user ID: ' || user_id;
     </para>
    </note>
 
+  <sect2 id="plpgsql-assert">
+   <title>Assertions</title>
+
+   <para>
+    <literal>Assertions</literal> provide a way to check that the
+    internal state of a function is as expected.  For example:
+<programlisting>
+CREATE FUNCTION delete_user(username text) RETURNS VOID AS $$
+BEGIN
+	DELETE FROM users WHERE users.username = delete_user.username;
+	ASSERT FOUND;
+END
+$$ LANGUAGE plpgsql;
+
+SELECT delete_user('mia');
+ERROR:  Assertion on line 4 failed
+CONTEXT:  PL/pgSQL function delete_user(text) line 4 at ASSERT
+</programlisting>
+
+    One could implement the equivalent functionality with a conditional
+    RAISE EXCEPTION statement, but assertions have two major differences:
+        <itemizedlist>
+         <listitem>
+           <para>
+            They're a lot faster to write than the equivalent IF .. THEN RAISE EXCEPTION .. END IF constructs.
+           </para>
+         </listitem>
+         <listitem>
+           <para>
+            They can be (and are by default) disabled in production
+            environments.  A disabled assertion only incurs a negligible
+            compile-time overhead and no execution time overhead, so you
+            can write complex checks for development environments without
+            having to worry about performance.
+           </para>
+         </listitem>
+        </itemizedlist> 
+   </para>
+
+   <para>
+    The configuration parameter <varname>plpgsql.enable_assertions</>
+    controls whether assertions are enabled.  Note that the value of
+    this parameter only affects subsequent compilations of
+    <application>PL/pgSQL</> functions, but not statements already
+    compiled in the current session.
+   </para>
+
+   <para>
+    It is also possible to enable assertions in a single function
+    (possibly overriding the global setting) by using a compile
+    option:
+<programlisting>
+CREATE FUNCTION delete_user(username text) RETURNS VOID AS $$
+#enable_assertions
+BEGIN
+	DELETE FROM users WHERE users.username = delete_user.username;
+	ASSERT FOUND;
+END
+$$ LANGUAGE plpgsql;
+</programlisting>
+   </para>
+  </sect2>
+
  </sect1>
 
  <sect1 id="plpgsql-trigger">

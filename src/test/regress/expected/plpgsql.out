@@ -5085,3 +5085,77 @@ NOTICE:  outer_func() done
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+-- check assertions
+set plpgsql.enable_assertions to true;
+create function foof()
+returns void
+as $$
+begin
+-- failure
+assert 1 > 2;
+end
+$$ language plpgsql;
+select foof();
+ERROR:  Assertion on line 4 failed
+CONTEXT:  PL/pgSQL function foof() line 4 at ASSERT
+drop function foof();
+create function foof()
+returns void
+as $$
+begin
+-- no failure
+assert 1 < 2;
+end
+$$ language plpgsql;
+select foof();
+ foof 
+------
+ 
+(1 row)
+
+drop function foof();
+create function foof()
+returns void
+as $$
+begin
+-- NULL is failure
+assert 1 < NULL;
+end
+$$ language plpgsql;
+select foof();
+ERROR:  Assertion on line 4 failed
+CONTEXT:  PL/pgSQL function foof() line 4 at ASSERT
+reset plpgsql.enable_assertions;
+-- still enabled for foof
+select foof();
+ERROR:  Assertion on line 4 failed
+CONTEXT:  PL/pgSQL function foof() line 4 at ASSERT
+drop function foof();
+create function foof()
+returns void
+as $$
+#enable_assertions
+begin
+-- failure
+assert 1 > 2;
+end
+$$ language plpgsql;
+select foof();
+ERROR:  Assertion on line 5 failed
+CONTEXT:  PL/pgSQL function foof() line 5 at ASSERT
+drop function foof();
+create function foof()
+returns void
+as $$
+begin
+-- failure, but assertions are disabled
+assert 1 > 2;
+end
+$$ language plpgsql;
+select foof();
+ foof 
+------
+ 
+(1 row)
+
+drop function foof();

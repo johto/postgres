@@ -3983,3 +3983,73 @@ drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
 
+-- check assertions
+
+set plpgsql.enable_assertions to true;
+
+create function foof()
+returns void
+as $$
+begin
+-- failure
+assert 1 > 2;
+end
+$$ language plpgsql;
+
+select foof();
+drop function foof();
+
+create function foof()
+returns void
+as $$
+begin
+-- no failure
+assert 1 < 2;
+end
+$$ language plpgsql;
+
+select foof();
+drop function foof();
+
+create function foof()
+returns void
+as $$
+begin
+-- NULL is failure
+assert 1 < NULL;
+end
+$$ language plpgsql;
+
+select foof();
+
+reset plpgsql.enable_assertions;
+-- still enabled for foof
+select foof();
+
+drop function foof();
+
+create function foof()
+returns void
+as $$
+#enable_assertions
+begin
+-- failure
+assert 1 > 2;
+end
+$$ language plpgsql;
+
+select foof();
+drop function foof();
+
+create function foof()
+returns void
+as $$
+begin
+-- failure, but assertions are disabled
+assert 1 > 2;
+end
+$$ language plpgsql;
+
+select foof();
+drop function foof();
+

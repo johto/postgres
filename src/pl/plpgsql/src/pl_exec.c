@@ -133,6 +133,8 @@ static int exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 					 PLpgSQL_stmt_dynexecute *stmt);
 static int exec_stmt_dynfors(PLpgSQL_execstate *estate,
 				  PLpgSQL_stmt_dynfors *stmt);
+static int exec_stmt_assert(PLpgSQL_execstate *estate,
+				  PLpgSQL_stmt_assert *stmt);
 
 static void plpgsql_estate_setup(PLpgSQL_execstate *estate,
 					 PLpgSQL_function *func,
@@ -1464,6 +1466,10 @@ exec_stmt(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
 
 		case PLPGSQL_STMT_CLOSE:
 			rc = exec_stmt_close(estate, (PLpgSQL_stmt_close *) stmt);
+			break;
+
+		case PLPGSQL_STMT_ASSERT:
+			rc = exec_stmt_assert(estate, (PLpgSQL_stmt_assert *) stmt);
 			break;
 
 		default:
@@ -3629,6 +3635,21 @@ exec_stmt_dynfors(PLpgSQL_execstate *estate, PLpgSQL_stmt_dynfors *stmt)
 	return rc;
 }
 
+static int
+exec_stmt_assert(PLpgSQL_execstate *estate, PLpgSQL_stmt_assert *stmt)
+{
+	bool value;
+	bool isnull;
+
+	value = exec_eval_boolean(estate, stmt->expr, &isnull);
+	exec_eval_cleanup(estate);
+	if (isnull || !value)
+		ereport(ERROR,
+				(errcode(ERRCODE_ASSERTION_FAILURE),
+				 errmsg("Assertion on line %d failed", stmt->lineno)));
+
+	return PLPGSQL_RC_OK;
+}
 
 /* ----------
  * exec_stmt_open			Execute an OPEN cursor statement

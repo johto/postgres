@@ -193,6 +193,7 @@ static	List			*read_raise_options(void);
 %type <stmt>	stmt_assign stmt_if stmt_loop stmt_while stmt_exit
 %type <stmt>	stmt_return stmt_raise stmt_execsql
 %type <stmt>	stmt_dynexecute stmt_for stmt_perform stmt_getdiag
+%type <stmt>	stmt_assert
 %type <stmt>	stmt_open stmt_fetch stmt_move stmt_close stmt_null
 %type <stmt>	stmt_case stmt_foreach_a
 
@@ -245,6 +246,7 @@ static	List			*read_raise_options(void);
 %token <keyword>	K_ALIAS
 %token <keyword>	K_ALL
 %token <keyword>	K_ARRAY
+%token <keyword>	K_ASSERT
 %token <keyword>	K_BACKWARD
 %token <keyword>	K_BEGIN
 %token <keyword>	K_BY
@@ -268,6 +270,7 @@ static	List			*read_raise_options(void);
 %token <keyword>	K_DUMP
 %token <keyword>	K_ELSE
 %token <keyword>	K_ELSIF
+%token <keyword>	K_ENABLE_ASSERTIONS
 %token <keyword>	K_END
 %token <keyword>	K_ERRCODE
 %token <keyword>	K_ERROR
@@ -353,6 +356,10 @@ comp_options	:
 comp_option		: '#' K_OPTION K_DUMP
 					{
 						plpgsql_DumpExecTree = true;
+					}
+				| '#' K_ENABLE_ASSERTIONS
+					{
+						plpgsql_curr_compile->enable_assertions = true;
 					}
 				| '#' K_VARIABLE_CONFLICT K_ERROR
 					{
@@ -833,6 +840,8 @@ proc_stmt		: pl_block ';'
 						{ $$ = $1; }
 				| stmt_getdiag
 						{ $$ = $1; }
+				| stmt_assert
+						{ $$ = $1; }
 				| stmt_open
 						{ $$ = $1; }
 				| stmt_fetch
@@ -931,6 +940,27 @@ stmt_getdiag	: K_GET getdiag_area_opt K_DIAGNOSTICS getdiag_list ';'
 						}
 
 						$$ = (PLpgSQL_stmt *)new;
+					}
+				;
+
+stmt_assert : K_ASSERT expr_until_semi
+					{
+						if (plpgsql_curr_compile->enable_assertions)
+						{
+							PLpgSQL_stmt_assert *new;
+
+							new = palloc0(sizeof(PLpgSQL_stmt_assert));
+							new->cmd_type = PLPGSQL_STMT_ASSERT;
+							new->lineno   = plpgsql_location_to_lineno(@1);
+							new->expr  = $2;
+
+							$$ = (PLpgSQL_stmt *)new;
+						}
+						else
+						{
+							/* skip if assertions are disabled */
+							$$ = NULL;
+						}
 					}
 				;
 

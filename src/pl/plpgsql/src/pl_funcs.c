@@ -260,6 +260,8 @@ plpgsql_stmt_typename(PLpgSQL_stmt *stmt)
 			return "CLOSE";
 		case PLPGSQL_STMT_PERFORM:
 			return "PERFORM";
+		case PLPGSQL_STMT_ASSERT:
+			return "ASSERT";
 	}
 
 	return "unknown";
@@ -338,6 +340,7 @@ static void free_open(PLpgSQL_stmt_open *stmt);
 static void free_fetch(PLpgSQL_stmt_fetch *stmt);
 static void free_close(PLpgSQL_stmt_close *stmt);
 static void free_perform(PLpgSQL_stmt_perform *stmt);
+static void free_assert(PLpgSQL_stmt_assert *stmt);
 static void free_expr(PLpgSQL_expr *expr);
 
 
@@ -414,6 +417,9 @@ free_stmt(PLpgSQL_stmt *stmt)
 			break;
 		case PLPGSQL_STMT_PERFORM:
 			free_perform((PLpgSQL_stmt_perform *) stmt);
+			break;
+		case PLPGSQL_STMT_ASSERT:
+			free_assert((PLpgSQL_stmt_assert *) stmt);
 			break;
 		default:
 			elog(ERROR, "unrecognized cmd_type: %d", stmt->cmd_type);
@@ -558,6 +564,12 @@ free_close(PLpgSQL_stmt_close *stmt)
 
 static void
 free_perform(PLpgSQL_stmt_perform *stmt)
+{
+	free_expr(stmt->expr);
+}
+
+static void
+free_assert(PLpgSQL_stmt_assert *stmt)
 {
 	free_expr(stmt->expr);
 }
@@ -742,6 +754,7 @@ static void dump_cursor_direction(PLpgSQL_stmt_fetch *stmt);
 static void dump_close(PLpgSQL_stmt_close *stmt);
 static void dump_perform(PLpgSQL_stmt_perform *stmt);
 static void dump_expr(PLpgSQL_expr *expr);
+static void dump_assert(PLpgSQL_stmt_assert *stmt);
 
 
 static void
@@ -827,6 +840,9 @@ dump_stmt(PLpgSQL_stmt *stmt)
 			break;
 		case PLPGSQL_STMT_PERFORM:
 			dump_perform((PLpgSQL_stmt_perform *) stmt);
+			break;
+		case PLPGSQL_STMT_ASSERT:
+			dump_assert((PLpgSQL_stmt_assert *) stmt);
 			break;
 		default:
 			elog(ERROR, "unrecognized cmd_type: %d", stmt->cmd_type);
@@ -1200,6 +1216,15 @@ dump_perform(PLpgSQL_stmt_perform *stmt)
 {
 	dump_ind();
 	printf("PERFORM expr = ");
+	dump_expr(stmt->expr);
+	printf("\n");
+}
+
+static void
+dump_assert(PLpgSQL_stmt_assert *stmt)
+{
+	dump_ind();
+	printf("ASSERT expr = ");
 	dump_expr(stmt->expr);
 	printf("\n");
 }
