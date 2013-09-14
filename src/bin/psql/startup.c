@@ -796,6 +796,8 @@ verbosity_hook(const char *newval)
 		pset.verbosity = PQERRORS_DEFAULT;
 	else if (strcmp(newval, "terse") == 0)
 		pset.verbosity = PQERRORS_TERSE;
+	else if (strcmp(newval, "compact") == 0)
+		pset.verbosity = PQERRORS_COMPACT;
 	else if (strcmp(newval, "verbose") == 0)
 		pset.verbosity = PQERRORS_VERBOSE;
 	else

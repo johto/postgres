@@ -915,6 +915,10 @@ pqGetErrorNotice3(PGconn *conn, bool isError)
 		if (val)
 			appendPQExpBuffer(&workBuf, libpq_gettext("QUERY:  %s\n"), val);
 		val = PQresultErrorField(res, PG_DIAG_CONTEXT);
+	}
+	if (isError || (conn->verbosity != PQERRORS_TERSE &&
+					conn->verbosity != PQERRORS_COMPACT))
+	{
 		if (val)
 			appendPQExpBuffer(&workBuf, libpq_gettext("CONTEXT:  %s\n"), val);
 	}

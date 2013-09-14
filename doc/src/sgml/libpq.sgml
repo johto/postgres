@@ -5418,6 +5418,7 @@ int PQsetClientEncoding(PGconn *<replaceable>conn</replaceable>, const char *<re
 typedef enum
 {
     PQERRORS_TERSE,
+    PQERRORS_COMPACT,
     PQERRORS_DEFAULT,
     PQERRORS_VERBOSE
 } PGVerbosity;
@@ -5430,10 +5431,12 @@ PGVerbosity PQsetErrorVerbosity(PGconn *conn, PGVerbosity verbosity);
       returned messages include severity, primary text, and position only;
       this will normally fit on a single line.  The default mode produces
       messages that include the above plus any detail, hint, or context
-      fields (these might span multiple lines).  The <firstterm>VERBOSE</>
-      mode includes all available fields.  Changing the verbosity does not
-      affect the messages available from already-existing
-      <structname>PGresult</> objects, only subsequently-created ones.
+      fields (these might span multiple lines).  The COMPACT mode is otherwise
+      the same as the default, except the context field will be omitted for
+      non-error messages.  The <firstterm>VERBOSE</> mode includes all
+      available fields.  Changing the verbosity does not affect the messages
+      available from already-existing <structname>PGresult</> objects, only
+      subsequently-created ones.
      </para>
     </listitem>
    </varlistentry>

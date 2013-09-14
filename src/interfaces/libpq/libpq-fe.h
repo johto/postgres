@@ -106,6 +106,7 @@ typedef enum
 typedef enum
 {
 	PQERRORS_TERSE,				/* single-line error messages */
+	PQERRORS_COMPACT,			/* single-line error messages on non-error messags */
 	PQERRORS_DEFAULT,			/* recommended style */
 	PQERRORS_VERBOSE			/* all the facts, ma'am */
 } PGVerbosity;
