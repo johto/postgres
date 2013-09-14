@@ -3238,6 +3238,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 	ParamListInfo paramLI;
 	long		tcount;
 	int			rc;
+	bool strict_mode = estate->func->strict_mode;
 	PLpgSQL_expr *expr = stmt->sqlstmt;
 
 	/*
@@ -3278,16 +3279,19 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 
 	/*
 	 * If we have INTO, then we only need one row back ... but if we have INTO
-	 * STRICT, ask for two rows, so that we can verify the statement returns
-	 * only one.  INSERT/UPDATE/DELETE are always treated strictly. Without
-	 * INTO, just run the statement to completion (tcount = 0).
+	 * STRICT or we're in strict mode, ask for two rows, so that we can verify
+	 * the statement returns only one.  INSERT/UPDATE/DELETE are always treated
+	 * strictly.  Without INTO, just run the statement to completion
+	 * (tcount = 0).
 	 *
 	 * We could just ask for two rows always when using INTO, but there are
 	 * some cases where demanding the extra row costs significant time, eg by
 	 * forcing completion of a sequential scan.  So don't do it unless we need
 	 * to enforce strictness.
 	 */
-	if (stmt->into)
+	if (strict_mode)
+		tcount = 2;
+	else if (stmt->into)
 	{
 		if (stmt->strict || stmt->mod_stmt)
 			tcount = 2;
@@ -3399,7 +3403,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		}
 		else
 		{
-			if (n > 1 && (stmt->strict || stmt->mod_stmt))
+			if (n > 1 && (strict_mode || stmt->strict || stmt->mod_stmt))
 				ereport(ERROR,
 						(errcode(ERRCODE_TOO_MANY_ROWS),
 						 errmsg("query returned more than one row")));
@@ -3419,6 +3423,11 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg("query has no destination for result data"),
 					 (rc == SPI_OK_SELECT) ? errhint("If you want to discard the results of a SELECT, use PERFORM instead.") : 0));
+
+		if (SPI_processed > 1 && strict_mode)
+			ereport(ERROR,
+					(errcode(ERRCODE_TOO_MANY_ROWS),
+					 errmsg("query processed more than one row")));
 	}
 
 	if (paramLI)
@@ -3442,6 +3451,7 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 	Oid			restype;
 	char	   *querystr;
 	int			exec_res;
+	bool		strict_mode = estate->func->strict_mode;
 
 	/*
 	 * First we evaluate the string expression after the EXECUTE keyword. Its
@@ -3559,8 +3569,10 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 
 		/*
 		 * If SELECT ... INTO specified STRICT, and the query didn't find
-		 * exactly one row, throw an error.  If STRICT was not specified, then
-		 * allow the query to find any number of rows.
+		 * exactly one row, throw an error.  Also if we're in strict mode and
+		 * the query found more than one row, we need to report a problem.  If
+		 * STRICT was not specified, then allow the query to find any number of
+		 * rows.
 		 */
 		if (n == 0)
 		{
@@ -3573,7 +3585,7 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 		}
 		else
 		{
-			if (n > 1 && stmt->strict)
+			if (n > 1 && (strict_mode || stmt->strict))
 				ereport(ERROR,
 						(errcode(ERRCODE_TOO_MANY_ROWS),
 						 errmsg("query returned more than one row")));
@@ -3590,6 +3602,10 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 		 * tuples that are being ignored, but historically we have not done
 		 * that.
 		 */
+		if (SPI_processed > 1 && strict_mode)
+			ereport(ERROR,
+					(errcode(ERRCODE_TOO_MANY_ROWS),
+					 errmsg("query processed more than one row")));
 	}
 
 	/* Release any result from SPI_execute, as well as the querystring */

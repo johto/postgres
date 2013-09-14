@@ -2587,6 +2587,64 @@ select footest();
 
 drop function footest();
 
+-- Test "strict mode" where no query should return or process more
+-- than one row.
+
+create or replace function footest() returns void as $$
+#strict_mode strict
+declare x record;
+begin
+  -- only one row, should work
+  insert into foo values(5,6) returning * into x;
+  -- no rows, should work
+  insert into foo select 1,1 where false;
+  -- perform is unaffected
+  perform 1 from foo;
+  -- only one row
+  select * from foo into x limit 1;
+  raise notice 'x.f1 = %, x.f2 = %', x.f1, x.f2;
+end$$ language plpgsql;
+
+select footest();
+
+create or replace function footest() returns void as $$
+#strict_mode strict
+declare x record;
+begin
+  -- not allowed to return more than one row
+  select * from foo into x where f1 < 100;
+  raise notice 'x.f1 = %, x.f2 = %', x.f1, x.f2;
+end$$ language plpgsql;
+
+select footest();
+
+create or replace function footest() returns void as $$
+#strict_mode strict
+begin
+  -- not allowed to insert more than one row
+  insert into foo values (1,1), (2,2);
+end$$ language plpgsql;
+
+select footest();
+
+create or replace function footest() returns void as $$
+#strict_mode strict
+begin
+  -- not allowed to update more than one row
+  update foo set f1=0 where f1 < 100;
+end$$ language plpgsql;
+
+select footest();
+
+create or replace function footest() returns void as $$
+#strict_mode strict
+begin
+  -- not allowed to delete more than one row
+  delete from foo where f1 < 100;
+end$$ language plpgsql;
+
+select footest();
+
 -- test scrollable cursor support
 
 create function sc_test() returns setof integer as $$

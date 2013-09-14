@@ -296,6 +296,7 @@ static	List			*read_raise_options(void);
 %token <keyword>	K_MOVE
 %token <keyword>	K_NEXT
 %token <keyword>	K_NO
+%token <keyword>	K_NONSTRICT
 %token <keyword>	K_NOT
 %token <keyword>	K_NOTICE
 %token <keyword>	K_NULL
@@ -325,6 +326,7 @@ static	List			*read_raise_options(void);
 %token <keyword>	K_SQLSTATE
 %token <keyword>	K_STACKED
 %token <keyword>	K_STRICT
+%token <keyword>	K_STRICT_MODE
 %token <keyword>	K_TABLE
 %token <keyword>	K_TABLE_NAME
 %token <keyword>	K_THEN
@@ -353,6 +355,14 @@ comp_options	:
 comp_option		: '#' K_OPTION K_DUMP
 					{
 						plpgsql_DumpExecTree = true;
+					}
+				| '#' K_STRICT_MODE K_STRICT
+					{
+						plpgsql_curr_compile->strict_mode = true;
+					}
+				| '#' K_STRICT_MODE K_NONSTRICT
+					{
+						plpgsql_curr_compile->strict_mode = false;
 					}
 				| '#' K_VARIABLE_CONFLICT K_ERROR
 					{
@@ -2313,6 +2323,7 @@ unreserved_keyword	:
 				| K_SLICE
 				| K_SQLSTATE
 				| K_STACKED
+				| K_STRICT_MODE
 				| K_TABLE
 				| K_TABLE_NAME
 				| K_TYPE
