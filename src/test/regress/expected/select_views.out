@@ -467,20 +467,6 @@ SELECT name, #thepath FROM iexit ORDER BY 1, 2;
  I- 580                             |       21
  I- 580                             |       22
  I- 580                             |       22
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        2
- I- 580/I-680                  Ramp |        4
- I- 580/I-680                  Ramp |        4
- I- 580/I-680                  Ramp |        4
- I- 580/I-680                  Ramp |        4
- I- 580/I-680                  Ramp |        5
- I- 580/I-680                  Ramp |        6
- I- 580/I-680                  Ramp |        6
- I- 580/I-680                  Ramp |        6
  I- 580                        Ramp |        2
  I- 580                        Ramp |        2
  I- 580                        Ramp |        2
@@ -731,6 +717,20 @@ SELECT name, #thepath FROM iexit ORDER BY 1, 2;
  I- 580                        Ramp |        8
  I- 580                        Ramp |        8
  I- 580                        Ramp |        8
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        2
+ I- 580/I-680                  Ramp |        4
+ I- 580/I-680                  Ramp |        4
+ I- 580/I-680                  Ramp |        4
+ I- 580/I-680                  Ramp |        4
+ I- 580/I-680                  Ramp |        5
+ I- 580/I-680                  Ramp |        6
+ I- 580/I-680                  Ramp |        6
+ I- 580/I-680                  Ramp |        6
  I- 680                             |        2
  I- 680                             |        2
  I- 680                             |        2
@@ -1318,11 +1318,8 @@ SET SESSION AUTHORIZATION regress_alice;
 --
 SELECT * FROM my_property_normal WHERE f_leak(passwd);
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => beafsteak
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => hamburger
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123
@@ -1337,7 +1334,6 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_property_normal WHERE f_leak(passwd);
 
 SELECT * FROM my_property_secure WHERE f_leak(passwd);
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123
@@ -1359,11 +1355,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_property_secure WHERE f_leak(passwd);
 --
 SELECT * FROM my_credit_card_normal WHERE f_leak(cnum);
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => 5555-6666-7777-8888
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => 9801-2345-6789-0123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   |        cnum         | climit 
 -----+---------------+------------------+-----------+---------------------+--------
  101 | regress_alice | +81-12-3456-7890 | passwd123 | 1111-2222-3333-4444 |   4000
@@ -1383,7 +1376,6 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_normal WHERE f_leak(cnum);
 
 SELECT * FROM my_credit_card_secure WHERE f_leak(cnum);
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   |        cnum         | climit 
 -----+---------------+------------------+-----------+---------------------+--------
  101 | regress_alice | +81-12-3456-7890 | passwd123 | 1111-2222-3333-4444 |   4000
@@ -1410,7 +1402,6 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_secure WHERE f_leak(cnum);
 SELECT * FROM my_credit_card_usage_normal
        WHERE f_leak(cnum) AND ymd >= '2011-10-01' AND ymd < '2011-11-01';
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   |        cnum         | climit |    ymd     | usage 
 -----+---------------+------------------+-----------+---------------------+--------+------------+-------
  101 | regress_alice | +81-12-3456-7890 | passwd123 | 1111-2222-3333-4444 |   4000 | 10-05-2011 |    90
@@ -1440,11 +1431,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_usage_normal
 SELECT * FROM my_credit_card_usage_secure
        WHERE f_leak(cnum) AND ymd >= '2011-10-01' AND ymd < '2011-11-01';
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => 1111-2222-3333-4444
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   |        cnum         | climit |    ymd     | usage 
 -----+---------------+------------------+-----------+---------------------+--------+------------+-------
  101 | regress_alice | +81-12-3456-7890 | passwd123 | 1111-2222-3333-4444 |   4000 | 10-05-2011 |    90
@@ -1479,11 +1467,8 @@ PREPARE p1 AS SELECT * FROM my_property_normal WHERE f_leak(passwd);
 PREPARE p2 AS SELECT * FROM my_property_secure WHERE f_leak(passwd);
 EXECUTE p1;
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => beafsteak
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => hamburger
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123
@@ -1491,7 +1476,6 @@ CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 
 EXECUTE p2;
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123
@@ -1503,7 +1487,6 @@ ALTER VIEW my_property_secure SET (security_barrier=false);
 SET SESSION AUTHORIZATION regress_alice;
 EXECUTE p1;		-- To be perform as a view with security-barrier
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123
@@ -1511,11 +1494,8 @@ CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 
 EXECUTE p2;		-- To be perform as a view without security-barrier
 NOTICE:  f_leak => passwd123
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => beafsteak
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
 NOTICE:  f_leak => hamburger
-CONTEXT:  PL/pgSQL function f_leak(text) line 1 at RAISE
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
  101 | regress_alice | +81-12-3456-7890 | passwd123

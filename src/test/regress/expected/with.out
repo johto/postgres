@@ -1903,11 +1903,8 @@ WITH t AS (
 )
 SELECT * FROM t;
 NOTICE:  y_trigger: a = 21
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
 NOTICE:  y_trigger: a = 22
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
 NOTICE:  y_trigger: a = 23
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
  a  
 ----
  21
@@ -1946,11 +1943,8 @@ WITH t AS (
 )
 SELECT * FROM t LIMIT 1;
 NOTICE:  y_trigger: a = 31
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
 NOTICE:  y_trigger: a = 32
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
 NOTICE:  y_trigger: a = 33
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
  a  
 ----
  31
@@ -1996,7 +1990,6 @@ WITH t AS (
 )
 SELECT * FROM t;
 NOTICE:  y_trigger
-CONTEXT:  PL/pgSQL function y_trigger() line 3 at RAISE
  a  
 ----
  41
