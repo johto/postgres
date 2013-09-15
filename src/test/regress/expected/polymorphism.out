@@ -555,10 +555,15 @@ select case when $1 then $2 else $3 end $$ language sql;
 -- if the CASE expression were not successfully inlined
 select f1, sql_if(f1 > 0, bleat(f1), bleat(f1 + 1)) from int4_tbl;
 NOTICE:  bleat 1
+CONTEXT:  PL/pgSQL function bleat(integer) line 3 at RAISE
 NOTICE:  bleat 123456
+CONTEXT:  PL/pgSQL function bleat(integer) line 3 at RAISE
 NOTICE:  bleat -123455
+CONTEXT:  PL/pgSQL function bleat(integer) line 3 at RAISE
 NOTICE:  bleat 2147483647
+CONTEXT:  PL/pgSQL function bleat(integer) line 3 at RAISE
 NOTICE:  bleat -2147483646
+CONTEXT:  PL/pgSQL function bleat(integer) line 3 at RAISE
      f1      |   sql_if    
 -------------+-------------
            0 |           1

@@ -70,10 +70,13 @@ alter event trigger regress_event_trigger disable;
 -- regress_event_trigger
 create table event_trigger_fire1 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+CONTEXT:  PL/pgSQL function test_event_trigger() line 3 at RAISE
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
+CONTEXT:  PL/pgSQL function test_event_trigger() line 3 at RAISE
 -- regress_event_trigger_end should fire here
 drop table event_trigger_fire1;
 NOTICE:  test_event_trigger: ddl_command_end DROP TABLE
+CONTEXT:  PL/pgSQL function test_event_trigger() line 3 at RAISE
 -- alter owner to non-superuser should fail
 alter event trigger regress_event_trigger owner to regression_bob;
 ERROR:  permission denied to change owner of event trigger "regress_event_trigger"
@@ -194,7 +197,8 @@ PL/pgSQL function test_evtrig_dropped_objects() line 8 at EXECUTE statement
 SQL statement "DROP TABLE IF EXISTS audit_tbls.schema_two_table_three"
 PL/pgSQL function test_evtrig_dropped_objects() line 8 at EXECUTE statement
 ERROR:  object audit_tbls.schema_two_table_three of type table cannot be dropped
-CONTEXT:  SQL statement "DROP TABLE IF EXISTS audit_tbls.schema_two_table_three"
+CONTEXT:  PL/pgSQL function undroppable() line 14 at RAISE
+SQL statement "DROP TABLE IF EXISTS audit_tbls.schema_two_table_three"
 PL/pgSQL function test_evtrig_dropped_objects() line 8 at EXECUTE statement
 DELETE FROM undroppable_objs WHERE object_identity = 'audit_tbls.schema_two_table_three';
 DROP SCHEMA schema_one, schema_two CASCADE;
@@ -224,6 +228,7 @@ NOTICE:  table "schema_one_table_three" does not exist, skipping
 CONTEXT:  SQL statement "DROP TABLE IF EXISTS audit_tbls.schema_one_table_three"
 PL/pgSQL function test_evtrig_dropped_objects() line 8 at EXECUTE statement
 ERROR:  object schema_one.table_three of type table cannot be dropped
+CONTEXT:  PL/pgSQL function undroppable() line 14 at RAISE
 DELETE FROM undroppable_objs WHERE object_identity = 'schema_one.table_three';
 DROP SCHEMA schema_one, schema_two CASCADE;
 NOTICE:  drop cascades to 7 other objects

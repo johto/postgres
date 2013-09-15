@@ -1518,27 +1518,35 @@ ERROR:  duplicate key value violates unique constraint "pfield_name"
 DETAIL:  Key (name)=(PF1_1) already exists.
 update PSlot set backlink = 'WS.not.there' where slotname = 'PS.base.a1';
 ERROR:  WS.not.there         does not exist
-CONTEXT:  PL/pgSQL function tg_backlink_a() line 17 at assignment
+CONTEXT:  PL/pgSQL function tg_backlink_set(character,character) line 30 at RAISE
+PL/pgSQL function tg_backlink_a() line 17 at assignment
 update PSlot set backlink = 'XX.illegal' where slotname = 'PS.base.a1';
 ERROR:  illegal backlink beginning with XX
-CONTEXT:  PL/pgSQL function tg_backlink_a() line 17 at assignment
+CONTEXT:  PL/pgSQL function tg_backlink_set(character,character) line 47 at RAISE
+PL/pgSQL function tg_backlink_a() line 17 at assignment
 update PSlot set slotlink = 'PS.not.there' where slotname = 'PS.base.a1';
 ERROR:  PS.not.there         does not exist
-CONTEXT:  PL/pgSQL function tg_slotlink_a() line 17 at assignment
+CONTEXT:  PL/pgSQL function tg_slotlink_set(character,character) line 30 at RAISE
+PL/pgSQL function tg_slotlink_a() line 17 at assignment
 update PSlot set slotlink = 'XX.illegal' where slotname = 'PS.base.a1';
 ERROR:  illegal slotlink beginning with XX
-CONTEXT:  PL/pgSQL function tg_slotlink_a() line 17 at assignment
+CONTEXT:  PL/pgSQL function tg_slotlink_set(character,character) line 77 at RAISE
+PL/pgSQL function tg_slotlink_a() line 17 at assignment
 insert into HSlot values ('HS', 'base.hub1', 1, '');
 ERROR:  duplicate key value violates unique constraint "hslot_name"
 DETAIL:  Key (slotname)=(HS.base.hub1.1      ) already exists.
 insert into HSlot values ('HS', 'base.hub1', 20, '');
 ERROR:  no manual manipulation of HSlot
+CONTEXT:  PL/pgSQL function tg_hslot_biu() line 12 at RAISE
 delete from HSlot;
 ERROR:  no manual manipulation of HSlot
+CONTEXT:  PL/pgSQL function tg_hslot_bd() line 12 at RAISE
 insert into IFace values ('IF', 'notthere', 'eth0', '');
 ERROR:  system "notthere" does not exist
+CONTEXT:  PL/pgSQL function tg_iface_biu() line 8 at RAISE
 insert into IFace values ('IF', 'orion', 'ethernet_interface_name_too_long', '');
 ERROR:  IFace slotname "IF.orion.ethernet_interface_name_too_long" too long (20 char max)
+CONTEXT:  PL/pgSQL function tg_iface_biu() line 14 at RAISE
 --
 -- The following tests are unrelated to the scenario outlined above;
 -- they merely exercise specific parts of PL/pgSQL
@@ -1934,8 +1942,11 @@ begin
 end$$ language plpgsql;
 select trap_zero_divide(50);
 NOTICE:  should see this
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 6 at RAISE
 NOTICE:  should see this only if 50 <> 0
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 8 at RAISE
 NOTICE:  should see this only if 50 fits in smallint
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 10 at RAISE
  trap_zero_divide 
 ------------------
                 2
@@ -1943,7 +1954,9 @@ NOTICE:  should see this only if 50 fits in smallint
 
 select trap_zero_divide(0);
 NOTICE:  should see this
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 6 at RAISE
 NOTICE:  caught division_by_zero
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 16 at RAISE
  trap_zero_divide 
 ------------------
                -1
@@ -1951,8 +1964,11 @@ NOTICE:  caught division_by_zero
 
 select trap_zero_divide(100000);
 NOTICE:  should see this
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 6 at RAISE
 NOTICE:  should see this only if 100000 <> 0
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 8 at RAISE
 NOTICE:  caught numeric_value_out_of_range
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 19 at RAISE
  trap_zero_divide 
 ------------------
                -2
@@ -1960,9 +1976,13 @@ NOTICE:  caught numeric_value_out_of_range
 
 select trap_zero_divide(-100);
 NOTICE:  should see this
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 6 at RAISE
 NOTICE:  should see this only if -100 <> 0
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 8 at RAISE
 NOTICE:  should see this only if -100 fits in smallint
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 10 at RAISE
 ERROR:  -100 is less than zero
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 12 at RAISE
 create function trap_matching_test(int) returns int as $$
 declare x int;
 	sx smallint;
@@ -1991,6 +2011,7 @@ select trap_matching_test(50);
 
 select trap_matching_test(0);
 NOTICE:  caught data_exception
+CONTEXT:  PL/pgSQL function trap_matching_test(integer) line 13 at RAISE
  trap_matching_test 
 --------------------
                  -1
@@ -1998,6 +2019,7 @@ NOTICE:  caught data_exception
 
 select trap_matching_test(100000);
 NOTICE:  caught data_exception
+CONTEXT:  PL/pgSQL function trap_matching_test(integer) line 13 at RAISE
  trap_matching_test 
 --------------------
                  -1
@@ -2005,6 +2027,7 @@ NOTICE:  caught data_exception
 
 select trap_matching_test(1);
 NOTICE:  caught numeric_value_out_of_range or cardinality_violation
+CONTEXT:  PL/pgSQL function trap_matching_test(integer) line 16 at RAISE
  trap_matching_test 
 --------------------
                  -2
@@ -2035,6 +2058,7 @@ end$$ language plpgsql;
 set statement_timeout to 2000;
 select blockme();
 NOTICE:  nyeah nyeah, can't stop me
+CONTEXT:  PL/pgSQL function blockme() line 16 at RAISE
  blockme 
 ---------
       20
@@ -2066,13 +2090,16 @@ begin
 end$$ language plpgsql;
 select test_variable_storage();
 NOTICE:  should see this
-CONTEXT:  SQL statement "SELECT trap_zero_divide(-100)"
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 6 at RAISE
+SQL statement "SELECT trap_zero_divide(-100)"
 PL/pgSQL function test_variable_storage() line 8 at PERFORM
 NOTICE:  should see this only if -100 <> 0
-CONTEXT:  SQL statement "SELECT trap_zero_divide(-100)"
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 8 at RAISE
+SQL statement "SELECT trap_zero_divide(-100)"
 PL/pgSQL function test_variable_storage() line 8 at PERFORM
 NOTICE:  should see this only if -100 fits in smallint
-CONTEXT:  SQL statement "SELECT trap_zero_divide(-100)"
+CONTEXT:  PL/pgSQL function trap_zero_divide(integer) line 10 at RAISE
+SQL statement "SELECT trap_zero_divide(-100)"
 PL/pgSQL function test_variable_storage() line 8 at PERFORM
  test_variable_storage 
 -----------------------
@@ -2119,6 +2146,7 @@ select trap_foreign_key(1);
 
 select trap_foreign_key(2);	-- detects FK violation
 NOTICE:  caught foreign_key_violation
+CONTEXT:  PL/pgSQL function trap_foreign_key(integer) line 7 at RAISE
  trap_foreign_key 
 ------------------
                 0
@@ -2139,6 +2167,7 @@ DETAIL:  Key (f1)=(2) is not present in table "master".
   rollback to x;
   select trap_foreign_key_2();  -- detects FK violation
 NOTICE:  caught foreign_key_violation
+CONTEXT:  PL/pgSQL function trap_foreign_key_2() line 7 at RAISE
  trap_foreign_key_2 
 --------------------
                   0
@@ -2481,7 +2510,9 @@ END;
 $$ LANGUAGE plpgsql;
 SELECT reraise_test();
 NOTICE:  exception syntax_error thrown in inner block, reraising
+CONTEXT:  PL/pgSQL function reraise_test() line 8 at RAISE
 NOTICE:  RIGHT - exception syntax_error caught in inner block
+CONTEXT:  PL/pgSQL function reraise_test() line 12 at RAISE
  reraise_test 
 --------------
  
@@ -2576,8 +2607,11 @@ begin
 end; $$ language plpgsql;
 select execute_into_test('eifoo');
 NOTICE:  10 1
+CONTEXT:  PL/pgSQL function execute_into_test(character varying) line 12 at RAISE
 NOTICE:  10 15
+CONTEXT:  PL/pgSQL function execute_into_test(character varying) line 14 at RAISE
 NOTICE:  10 15 20
+CONTEXT:  PL/pgSQL function execute_into_test(character varying) line 16 at RAISE
  execute_into_test 
 -------------------
  (1,2)
@@ -2636,9 +2670,13 @@ begin
 end; $$ language plpgsql;
 select excpt_test3();
 NOTICE:  caught exception P0001 user exception
+CONTEXT:  PL/pgSQL function excpt_test3() line 6 at RAISE
 NOTICE:  P0001 user exception
+CONTEXT:  PL/pgSQL function excpt_test3() line 8 at RAISE
 NOTICE:  caught exception 22012 division by zero
+CONTEXT:  PL/pgSQL function excpt_test3() line 15 at RAISE
 NOTICE:  P0001 user exception
+CONTEXT:  PL/pgSQL function excpt_test3() line 17 at RAISE
  excpt_test3 
 -------------
  
@@ -2659,6 +2697,7 @@ begin
 end;$$ language plpgsql;
 select raise_exprs();
 NOTICE:  {10,20,30}; 20; xyz; xyzabc; (10,aaa,,30); <NULL>
+CONTEXT:  PL/pgSQL function raise_exprs() line 8 at RAISE
  raise_exprs 
 -------------
  
@@ -2750,58 +2789,111 @@ begin
 end; $$ language plpgsql;
 select continue_test1();
 NOTICE:  ---1---
+CONTEXT:  PL/pgSQL function continue_test1() line 4 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  7
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  8
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  9
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  10
+CONTEXT:  PL/pgSQL function continue_test1() line 7 at RAISE
 NOTICE:  ---2---
+CONTEXT:  PL/pgSQL function continue_test1() line 12 at RAISE
 NOTICE:  9
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  8
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  7
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  0
+CONTEXT:  PL/pgSQL function continue_test1() line 17 at RAISE
 NOTICE:  ---3---
+CONTEXT:  PL/pgSQL function continue_test1() line 23 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function continue_test1() line 28 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function continue_test1() line 28 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function continue_test1() line 28 at RAISE
 NOTICE:  7
+CONTEXT:  PL/pgSQL function continue_test1() line 28 at RAISE
 NOTICE:  9
+CONTEXT:  PL/pgSQL function continue_test1() line 28 at RAISE
 NOTICE:  ---4---
+CONTEXT:  PL/pgSQL function continue_test1() line 31 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  7
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  8
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  9
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  10
+CONTEXT:  PL/pgSQL function continue_test1() line 36 at RAISE
 NOTICE:  ---5---
+CONTEXT:  PL/pgSQL function continue_test1() line 40 at RAISE
 NOTICE:  30
+CONTEXT:  PL/pgSQL function continue_test1() line 43 at RAISE
 NOTICE:  40
+CONTEXT:  PL/pgSQL function continue_test1() line 43 at RAISE
 NOTICE:  ---6---
+CONTEXT:  PL/pgSQL function continue_test1() line 46 at RAISE
 NOTICE:  30
+CONTEXT:  PL/pgSQL function continue_test1() line 49 at RAISE
 NOTICE:  40
+CONTEXT:  PL/pgSQL function continue_test1() line 49 at RAISE
 NOTICE:  ---7---
+CONTEXT:  PL/pgSQL function continue_test1() line 52 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function continue_test1() line 54 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function continue_test1() line 54 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function continue_test1() line 54 at RAISE
 NOTICE:  ---8---
+CONTEXT:  PL/pgSQL function continue_test1() line 58 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function continue_test1() line 61 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function continue_test1() line 61 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function continue_test1() line 61 at RAISE
 NOTICE:  ---9---
+CONTEXT:  PL/pgSQL function continue_test1() line 66 at RAISE
 NOTICE:  10
+CONTEXT:  PL/pgSQL function continue_test1() line 68 at RAISE
 NOTICE:  ---10---
+CONTEXT:  PL/pgSQL function continue_test1() line 72 at RAISE
 NOTICE:  10
+CONTEXT:  PL/pgSQL function continue_test1() line 74 at RAISE
  continue_test1 
 ----------------
  
@@ -2924,24 +3016,43 @@ end;
 $proc$ language plpgsql;
 select for_vect();
 NOTICE:  1
+CONTEXT:  PL/pgSQL function for_vect() line 6 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function for_vect() line 6 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function for_vect() line 6 at RAISE
 NOTICE:  1 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 10 at RAISE
 NOTICE:  2 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 10 at RAISE
 NOTICE:  3 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 10 at RAISE
 NOTICE:  4 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 10 at RAISE
 NOTICE:  1
+CONTEXT:  PL/pgSQL function for_vect() line 14 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function for_vect() line 14 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function for_vect() line 14 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function for_vect() line 14 at RAISE
 NOTICE:  1 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 18 at RAISE
 NOTICE:  2 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 18 at RAISE
 NOTICE:  3 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 18 at RAISE
 NOTICE:  4 BB CC
+CONTEXT:  PL/pgSQL function for_vect() line 18 at RAISE
 NOTICE:  1 bb cc
+CONTEXT:  PL/pgSQL function for_vect() line 22 at RAISE
 NOTICE:  2 bb cc
+CONTEXT:  PL/pgSQL function for_vect() line 22 at RAISE
 NOTICE:  3 bb cc
+CONTEXT:  PL/pgSQL function for_vect() line 22 at RAISE
 NOTICE:  4 bb cc
+CONTEXT:  PL/pgSQL function for_vect() line 22 at RAISE
  for_vect 
 ----------
  
@@ -2981,6 +3092,7 @@ begin
 end$$ language plpgsql;
 select footest();
 NOTICE:  x.f1 = 5, x.f2 = 6
+CONTEXT:  PL/pgSQL function footest() line 6 at RAISE
  footest 
 ---------
  
@@ -3005,6 +3117,7 @@ begin
 end$$ language plpgsql;
 select footest();
 NOTICE:  x.f1 = 5, x.f2 = 6
+CONTEXT:  PL/pgSQL function footest() line 6 at RAISE
  footest 
 ---------
  
@@ -3019,6 +3132,7 @@ begin
 end$$ language plpgsql;
 select footest();
 NOTICE:  x.f1 = 7, x.f2 = 8
+CONTEXT:  PL/pgSQL function footest() line 6 at RAISE
  footest 
 ---------
  
@@ -3044,6 +3158,7 @@ begin
 end$$ language plpgsql;
 select footest();
 NOTICE:  x.f1 = 3, x.f2 = 4
+CONTEXT:  PL/pgSQL function footest() line 6 at RAISE
  footest 
 ---------
  
@@ -3078,6 +3193,7 @@ begin
 end$$ language plpgsql;
 select footest();
 NOTICE:  x.f1 = 3, x.f2 = 4
+CONTEXT:  PL/pgSQL function footest() line 6 at RAISE
  footest 
 ---------
  
@@ -3282,9 +3398,13 @@ end;
 $$ language plpgsql;
 select pl_qual_names(42);
 NOTICE:  param1 = 2
+CONTEXT:  PL/pgSQL function pl_qual_names(integer) line 10 at RAISE
 NOTICE:  pl_qual_names.param1 = 42
+CONTEXT:  PL/pgSQL function pl_qual_names(integer) line 11 at RAISE
 NOTICE:  outerblock.param1 = 1
+CONTEXT:  PL/pgSQL function pl_qual_names(integer) line 12 at RAISE
 NOTICE:  innerblock.param1 = 2
+CONTEXT:  PL/pgSQL function pl_qual_names(integer) line 13 at RAISE
  pl_qual_names 
 ---------------
  
@@ -3353,11 +3473,17 @@ end
 $$ language plpgsql;
 select exc_using(5, 'foobar');
 NOTICE:  1
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function exc_using(integer,text) line 5 at RAISE
  exc_using 
 -----------
         26
@@ -3381,11 +3507,17 @@ end;
 $$ language plpgsql;
 select exc_using(5);
 NOTICE:  1
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function exc_using(integer) line 10 at RAISE
  exc_using 
 -----------
  
@@ -3430,22 +3562,39 @@ end;
 $$ language plpgsql;
 select forc01();
 NOTICE:  5 from c
+CONTEXT:  PL/pgSQL function forc01() line 9 at RAISE
 NOTICE:  6 from c
+CONTEXT:  PL/pgSQL function forc01() line 9 at RAISE
 NOTICE:  7 from c
+CONTEXT:  PL/pgSQL function forc01() line 9 at RAISE
 NOTICE:  9 from c
+CONTEXT:  PL/pgSQL function forc01() line 13 at RAISE
 NOTICE:  10 from c
+CONTEXT:  PL/pgSQL function forc01() line 13 at RAISE
 NOTICE:  41 from c2
+CONTEXT:  PL/pgSQL function forc01() line 17 at RAISE
 NOTICE:  42 from c2
+CONTEXT:  PL/pgSQL function forc01() line 17 at RAISE
 NOTICE:  43 from c2
+CONTEXT:  PL/pgSQL function forc01() line 17 at RAISE
 NOTICE:  after loop, c2 = c2
+CONTEXT:  PL/pgSQL function forc01() line 20 at RAISE
 NOTICE:  41 from special_name
+CONTEXT:  PL/pgSQL function forc01() line 23 at RAISE
 NOTICE:  42 from special_name
+CONTEXT:  PL/pgSQL function forc01() line 23 at RAISE
 NOTICE:  43 from special_name
+CONTEXT:  PL/pgSQL function forc01() line 23 at RAISE
 NOTICE:  after loop, c2 = special_name
+CONTEXT:  PL/pgSQL function forc01() line 25 at RAISE
 NOTICE:  41
+CONTEXT:  PL/pgSQL function forc01() line 30 at RAISE
 NOTICE:  42
+CONTEXT:  PL/pgSQL function forc01() line 30 at RAISE
 NOTICE:  43
+CONTEXT:  PL/pgSQL function forc01() line 30 at RAISE
 NOTICE:  after loop, c2 = <NULL>
+CONTEXT:  PL/pgSQL function forc01() line 32 at RAISE
  forc01 
 --------
  
@@ -3466,15 +3615,25 @@ end;
 $$ language plpgsql;
 select forc01();
 NOTICE:  1, 1
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  2, 2
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  3, 3
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  4, 4
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  5, 5
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  6, 6
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  7, 7
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  8, 8
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  9, 9
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
 NOTICE:  10, 10
+CONTEXT:  PL/pgSQL function forc01() line 6 at RAISE
  forc01 
 --------
  
@@ -3512,15 +3671,25 @@ end;
 $$ language plpgsql;
 select forc01();
 NOTICE:  100, 2
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  200, 4
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  300, 6
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  400, 8
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  500, 10
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  600, 12
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  700, 14
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  800, 16
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  900, 18
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
 NOTICE:  1000, 20
+CONTEXT:  PL/pgSQL function forc01() line 10 at RAISE
  forc01 
 --------
  
@@ -3769,8 +3938,10 @@ select raise_test();
 NOTICE:  1 2 3
 DETAIL:  some detail info
 HINT:  some hint
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 ERROR:  1 2 3
 DETAIL:  some detail info
+CONTEXT:  PL/pgSQL function raise_test() line 5 at RAISE
 -- Since we can't actually see the thrown SQLSTATE in default psql output,
 -- test it like this; this also tests re-RAISE
 create or replace function raise_test() returns void as $$
@@ -3785,8 +3956,10 @@ end;
 $$ language plpgsql;
 select raise_test();
 NOTICE:  SQLSTATE: 22012 SQLERRM: check me
+CONTEXT:  PL/pgSQL function raise_test() line 7 at RAISE
 ERROR:  check me
 DETAIL:  some detail info
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise 'check me'
@@ -3799,8 +3972,10 @@ end;
 $$ language plpgsql;
 select raise_test();
 NOTICE:  SQLSTATE: 1234F SQLERRM: check me
+CONTEXT:  PL/pgSQL function raise_test() line 7 at RAISE
 ERROR:  check me
 DETAIL:  some detail info
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 -- SQLSTATE specification in WHEN
 create or replace function raise_test() returns void as $$
 begin
@@ -3814,8 +3989,10 @@ end;
 $$ language plpgsql;
 select raise_test();
 NOTICE:  SQLSTATE: 1234F SQLERRM: check me
+CONTEXT:  PL/pgSQL function raise_test() line 7 at RAISE
 ERROR:  check me
 DETAIL:  some detail info
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise division_by_zero using detail = 'some detail info';
@@ -3827,8 +4004,10 @@ end;
 $$ language plpgsql;
 select raise_test();
 NOTICE:  SQLSTATE: 22012 SQLERRM: division_by_zero
+CONTEXT:  PL/pgSQL function raise_test() line 6 at RAISE
 ERROR:  division_by_zero
 DETAIL:  some detail info
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise division_by_zero;
@@ -3836,6 +4015,7 @@ end;
 $$ language plpgsql;
 select raise_test();
 ERROR:  division_by_zero
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise sqlstate '1234F';
@@ -3843,6 +4023,7 @@ end;
 $$ language plpgsql;
 select raise_test();
 ERROR:  1234F
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise division_by_zero using message = 'custom' || ' message';
@@ -3850,6 +4031,7 @@ end;
 $$ language plpgsql;
 select raise_test();
 ERROR:  custom message
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 create or replace function raise_test() returns void as $$
 begin
   raise using message = 'custom' || ' message', errcode = '22012';
@@ -3857,6 +4039,7 @@ end;
 $$ language plpgsql;
 select raise_test();
 ERROR:  custom message
+CONTEXT:  PL/pgSQL function raise_test() line 3 at RAISE
 -- conflict on message
 create or replace function raise_test() returns void as $$
 begin
@@ -3915,6 +4098,7 @@ end;
 $$ language plpgsql;
 select stacked_diagnostics_test();
 NOTICE:  sqlstate: 22012, message: division by zero, context: [PL/pgSQL function zero_divide() line 4 at RETURN <- SQL statement "SELECT zero_divide()" <- PL/pgSQL function stacked_diagnostics_test() line 6 at PERFORM]
+CONTEXT:  PL/pgSQL function stacked_diagnostics_test() line 12 at RAISE
  stacked_diagnostics_test 
 --------------------------
  
@@ -3936,6 +4120,7 @@ end;
 $$ language plpgsql;
 select stacked_diagnostics_test();
 NOTICE:  message: custom exception, detail: some detail of custom exception, hint: some hint related to custom exception
+CONTEXT:  PL/pgSQL function stacked_diagnostics_test() line 12 at RAISE
  stacked_diagnostics_test 
 --------------------------
  
@@ -3972,7 +4157,9 @@ end;
 $$ language plpgsql;
 select raise_test();
 NOTICE:  22012
+CONTEXT:  PL/pgSQL function raise_test() line 6 at RAISE
 ERROR:  substitute message
+CONTEXT:  PL/pgSQL function raise_test() line 7 at RAISE
 drop function raise_test();
 -- test passing column_name, constraint_name, datatype_name, table_name
 -- and schema_name error fields
@@ -4002,6 +4189,7 @@ end;
 $$ language plpgsql;
 select stacked_diagnostics_test();
 NOTICE:  column >>some column name<<, constraint >>some constraint name<<, type >>some datatype name<<, table >>some table name<<, schema >>some schema name<<
+CONTEXT:  PL/pgSQL function stacked_diagnostics_test() line 21 at RAISE
  stacked_diagnostics_test 
 --------------------------
  
@@ -4093,6 +4281,7 @@ end
 $$ language plpgsql;
 select catch();
 NOTICE:  caught case_not_found 20000 case not found
+CONTEXT:  PL/pgSQL function catch() line 6 at RAISE
  catch 
 -------
  
@@ -4148,10 +4337,15 @@ begin
 $$ language plpgsql;
 select vari(1,2,3,4,5);
 NOTICE:  1
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
  vari 
 ------
  
@@ -4159,8 +4353,11 @@ NOTICE:  5
 
 select vari(3,4,5);
 NOTICE:  3
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  5
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
  vari 
 ------
  
@@ -4168,8 +4365,11 @@ NOTICE:  5
 
 select vari(variadic array[5,6,7]);
 NOTICE:  5
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  6
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
 NOTICE:  7
+CONTEXT:  PL/pgSQL function vari(integer[]) line 4 at RAISE
  vari 
 ------
  
@@ -4221,6 +4421,7 @@ end;
 $$ language plpgsql immutable strict;
 select pleast(10);
 NOTICE:  non-variadic function called
+CONTEXT:  PL/pgSQL function pleast(numeric) line 3 at RAISE
  pleast 
 --------
      10
@@ -4280,9 +4481,13 @@ end;
 $$ language plpgsql;
 select * from rttest();
 NOTICE:  t 2
+CONTEXT:  PL/pgSQL function rttest() line 6 at RAISE
 NOTICE:  f 0
+CONTEXT:  PL/pgSQL function rttest() line 9 at RAISE
 NOTICE:  t 2
+CONTEXT:  PL/pgSQL function rttest() line 12 at RAISE
 NOTICE:  f 0
+CONTEXT:  PL/pgSQL function rttest() line 15 at RAISE
  rttest 
 --------
      10
@@ -4458,6 +4663,7 @@ LINE 4:   return 'foo\\bar\041baz';
 HINT:  Use the escape string syntax for backslashes, e.g., E'\\'.
 select strtest();
 NOTICE:  foo\bar!baz
+CONTEXT:  PL/pgSQL function strtest() line 3 at RAISE
 WARNING:  nonstandard use of \\ in a string literal
 LINE 1: SELECT 'foo\\bar\041baz'
                ^
@@ -4477,6 +4683,7 @@ end
 $$ language plpgsql;
 select strtest();
 NOTICE:  foo\bar!baz
+CONTEXT:  PL/pgSQL function strtest() line 3 at RAISE
    strtest   
 -------------
  foo\bar!baz
@@ -4491,6 +4698,7 @@ end
 $$ language plpgsql;
 select strtest();
 NOTICE:  foo\\bar\041baz\
+CONTEXT:  PL/pgSQL function strtest() line 3 at RAISE
      strtest      
 ------------------
  foo\\bar\041baz\
@@ -4504,6 +4712,7 @@ end
 $$ language plpgsql;
 select strtest();
 NOTICE:  foo\bar!baz
+CONTEXT:  PL/pgSQL function strtest() line 3 at RAISE
    strtest   
 -------------
  foo\bar!baz
@@ -4520,15 +4729,25 @@ BEGIN
     END LOOP;
 END$$;
 NOTICE:  001, Entrance
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  002, Office
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  003, Office
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  004, Technical
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  101, Office
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  102, Conference
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  103, Restroom
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  104, Technical
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  105, Office
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 NOTICE:  106, Office
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 -- these are to check syntax error reporting
 DO LANGUAGE plpgsql $$begin return 1; end$$;
 ERROR:  RETURN cannot have a parameter in function returning void
@@ -4656,9 +4875,13 @@ begin
 $$ language plpgsql;
 select foreach_test(ARRAY[1,2,3,4]);
 NOTICE:  1
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4666,9 +4889,13 @@ NOTICE:  4
 
 select foreach_test(ARRAY[[1,2],[3,4]]);
 NOTICE:  1
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  2
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  3
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  4
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4703,6 +4930,7 @@ begin
 $$ language plpgsql;
 select foreach_test(ARRAY[1,2,3,4]);
 NOTICE:  {1,2,3,4}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4710,7 +4938,9 @@ NOTICE:  {1,2,3,4}
 
 select foreach_test(ARRAY[[1,2],[3,4]]);
 NOTICE:  {1,2}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  {3,4}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4734,6 +4964,7 @@ CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 4 at FOREACH over array
 -- ok
 select foreach_test(ARRAY[[1,2],[3,4]]);
 NOTICE:  {{1,2},{3,4}}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4741,7 +4972,9 @@ NOTICE:  {{1,2},{3,4}}
 
 select foreach_test(ARRAY[[[1,2]],[[3,4]]]);
 NOTICE:  {{1,2}}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  {{3,4}}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4761,8 +4994,11 @@ begin
 $$ language plpgsql;
 select foreach_test(ARRAY[(10,20),(40,69),(35,78)]::xy_tuple[]);
 NOTICE:  (10,20)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  (40,69)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  (35,78)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4770,9 +5006,13 @@ NOTICE:  (35,78)
 
 select foreach_test(ARRAY[[(10,20),(40,69)],[(35,78),(88,76)]]::xy_tuple[]);
 NOTICE:  (10,20)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  (40,69)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  (35,78)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  (88,76)
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4790,8 +5030,11 @@ begin
 $$ language plpgsql;
 select foreach_test(ARRAY[(10,20),(40,69),(35,78)]::xy_tuple[]);
 NOTICE:  x = 10, y = 20
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  x = 40, y = 69
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  x = 35, y = 78
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4799,9 +5042,13 @@ NOTICE:  x = 35, y = 78
 
 select foreach_test(ARRAY[[(10,20),(40,69)],[(35,78),(88,76)]]::xy_tuple[]);
 NOTICE:  x = 10, y = 20
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  x = 40, y = 69
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  x = 35, y = 78
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  x = 88, y = 76
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4820,6 +5067,7 @@ begin
 $$ language plpgsql;
 select foreach_test(ARRAY[(10,20),(40,69),(35,78)]::xy_tuple[]);
 NOTICE:  {"(10,20)","(40,69)","(35,78)"}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4827,7 +5075,9 @@ NOTICE:  {"(10,20)","(40,69)","(35,78)"}
 
 select foreach_test(ARRAY[[(10,20),(40,69)],[(35,78),(88,76)]]::xy_tuple[]);
 NOTICE:  {"(10,20)","(40,69)"}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
 NOTICE:  {"(35,78)","(88,76)"}
+CONTEXT:  PL/pgSQL function foreach_test(anyarray) line 6 at RAISE
  foreach_test 
 --------------
  
@@ -4935,24 +5185,31 @@ end;
 $$ language plpgsql;
 select outer_outer_func(10);
 NOTICE:  calling down into outer_func()
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 5 at RAISE
 NOTICE:  calling down into inner_func()
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 5 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 4 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 5 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 7 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 8 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  lets make sure we didnt break anything
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 9 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  inner_func() done
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 7 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  outer_func() done
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 7 at RAISE
  outer_outer_func 
 ------------------
                20
@@ -4961,24 +5218,31 @@ NOTICE:  outer_func() done
 -- repeated call should to work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 5 at RAISE
 NOTICE:  calling down into inner_func()
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 5 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 4 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 5 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 7 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 8 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  lets make sure we didnt break anything
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 9 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  inner_func() done
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 7 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  outer_func() done
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 7 at RAISE
  outer_outer_func 
 ------------------
                40
@@ -5033,24 +5297,31 @@ end;
 $$ language plpgsql;
 select outer_outer_func(10);
 NOTICE:  calling down into outer_func()
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 5 at RAISE
 NOTICE:  calling down into inner_func()
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 5 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 10 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 11 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 15 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 16 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  lets make sure we didnt break anything
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 17 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  inner_func() done
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 7 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  outer_func() done
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 7 at RAISE
  outer_outer_func 
 ------------------
                20
@@ -5059,24 +5330,31 @@ NOTICE:  outer_func() done
 -- repeated call should to work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 5 at RAISE
 NOTICE:  calling down into inner_func()
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 5 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 10 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 11 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  ***PL/pgSQL function inner_func(integer) line 15 at GET DIAGNOSTICS
 PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment***
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 16 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  lets make sure we didnt break anything
-CONTEXT:  PL/pgSQL function outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function inner_func(integer) line 17 at RAISE
+PL/pgSQL function outer_func(integer) line 6 at assignment
 PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  inner_func() done
-CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 6 at assignment
+CONTEXT:  PL/pgSQL function outer_func(integer) line 7 at RAISE
+PL/pgSQL function outer_outer_func(integer) line 6 at assignment
 NOTICE:  outer_func() done
+CONTEXT:  PL/pgSQL function outer_outer_func(integer) line 7 at RAISE
  outer_outer_func 
 ------------------
                40
