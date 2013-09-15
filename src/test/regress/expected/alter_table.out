@@ -361,11 +361,14 @@ CREATE FUNCTION boo(int) RETURNS int IMMUTABLE STRICT LANGUAGE plpgsql AS $$ BEG
 INSERT INTO tmp7 VALUES (8, 18);
 ALTER TABLE tmp7 ADD CONSTRAINT identity CHECK (b = boo(b));
 NOTICE:  boo: 18
+CONTEXT:  PL/pgSQL function boo(integer) line 1 at RAISE
 ALTER TABLE tmp3 ADD CONSTRAINT IDENTITY check (b = boo(b)) NOT VALID;
 NOTICE:  merging constraint "identity" with inherited definition
 ALTER TABLE tmp3 VALIDATE CONSTRAINT identity;
 NOTICE:  boo: 16
+CONTEXT:  PL/pgSQL function boo(integer) line 1 at RAISE
 NOTICE:  boo: 20
+CONTEXT:  PL/pgSQL function boo(integer) line 1 at RAISE
 -- Try (and fail) to create constraint from tmp5(a) to tmp4(a) - unique constraint on
 -- tmp4 is a,b
 ALTER TABLE tmp5 add constraint tmpconstr foreign key(a) references tmp4(a) match full;
