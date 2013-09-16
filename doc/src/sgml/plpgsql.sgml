@@ -3537,8 +3537,8 @@ RAISE unique_violation USING MESSAGE = 'Duplicate user ID: ' || user_id;
 <programlisting>
 CREATE FUNCTION delete_user(username text) RETURNS VOID AS $$
 BEGIN
-	DELETE FROM users WHERE users.username = delete_user.username;
-	ASSERT FOUND;
+    DELETE FROM users WHERE users.username = delete_user.username;
+    ASSERT FOUND;
 END
 $$ LANGUAGE plpgsql;
 
@@ -3583,8 +3583,8 @@ CONTEXT:  PL/pgSQL function delete_user(text) line 4 at ASSERT
 CREATE FUNCTION delete_user(username text) RETURNS VOID AS $$
 #enable_assertions
 BEGIN
-	DELETE FROM users WHERE users.username = delete_user.username;
-	ASSERT FOUND;
+    DELETE FROM users WHERE users.username = delete_user.username;
+    ASSERT FOUND;
 END
 $$ LANGUAGE plpgsql;
 </programlisting>
