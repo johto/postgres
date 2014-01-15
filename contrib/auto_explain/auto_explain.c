@@ -15,6 +15,7 @@
 #include "commands/explain.h"
 #include "executor/instrument.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
 
 PG_MODULE_MAGIC;
 
@@ -167,6 +168,9 @@ explain_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	if (auto_explain_enabled())
 	{
+        StringInfoData param_str;
+        int i;
+
 		/* Enable per-node instrumentation iff log_analyze is required. */
 		if (auto_explain_log_analyze && (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0)
 		{
@@ -174,6 +178,45 @@ explain_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			if (auto_explain_log_buffers)
 				queryDesc->instrument_options |= INSTRUMENT_BUFFERS;
 		}
+
+        initStringInfo(&param_str);
+        for (i = 0; queryDesc->params && i < queryDesc->params->numParams; ++i)
+        {
+            ParamExternData *prm = &queryDesc->params->params[i];
+            Oid typoutput;
+            bool typisvarlena;
+            char *pstring;
+            char *p;
+
+            appendStringInfo(&param_str, "%s$%d = ",
+                             i > 0 ? ", " : "",
+                             i + 1);
+
+            if (prm->isnull || !OidIsValid(prm->ptype))
+            {
+                appendStringInfo(&param_str, "NULL");
+                continue;
+            }
+
+            getTypeOutputInfo(prm->ptype, &typoutput, &typisvarlena);
+            pstring = OidOutputFunctionCall(typoutput, prm->value);
+            appendStringInfoCharMacro(&param_str, '\'');
+            for (p = pstring; *p; p++)
+            {
+                if (*p == '\'') /* double single quotes */
+                    appendStringInfoCharMacro(&param_str, *p);
+                appendStringInfoCharMacro(&param_str, *p);
+            }
+            appendStringInfoCharMacro(&param_str, '\'');
+
+            pfree(pstring);
+        }
+
+        ereport(LOG,
+				(errmsg("ABOUT TO RUN: %s\nparameters: %s", queryDesc->sourceText, param_str.data),
+                 errhidestmt(true)));
+
+        pfree(param_str.data);
 	}
 
 	if (prev_ExecutorStart)

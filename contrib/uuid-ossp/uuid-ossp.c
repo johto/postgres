@@ -9,6 +9,8 @@
  *-------------------------------------------------------------------------
  */
 
+#define _XOPEN_SOURCE
+
 #include "postgres.h"
 #include "fmgr.h"
 #include "utils/builtins.h"

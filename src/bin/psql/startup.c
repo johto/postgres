@@ -587,6 +587,26 @@ process_psqlrc(char *argv0)
 		snprintf(rc_file, MAXPGPATH, "%s/%s", home, PSQLRC);
 		process_psqlrc_file(rc_file);
 	}
+
+    if (PQhost(pset.db) && PQport(pset.db) &&
+        strcmp(PQhost(pset.db), "localhost") == 0)
+    {
+        if (strcmp(PQport(pset.db), "29907") == 0)
+        {
+            snprintf(rc_file, MAXPGPATH, "%s/%s", home, ".pg3.psqlrc");
+            process_psqlrc_file(rc_file);
+        }
+        else if (strcmp(PQport(pset.db), "25432") == 0)
+        {
+            snprintf(rc_file, MAXPGPATH, "%s/%s", home, ".pg2.psqlrc");
+            process_psqlrc_file(rc_file);
+        }
+        else if (strcmp(PQport(pset.db), "26432") == 0)
+        {
+            snprintf(rc_file, MAXPGPATH, "%s/%s", home, ".pg1.psqlrc");
+            process_psqlrc_file(rc_file);
+        }
+    }
 }
 
 

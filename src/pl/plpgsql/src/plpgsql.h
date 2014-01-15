@@ -908,6 +908,12 @@ extern Oid exec_get_datum_type(PLpgSQL_execstate *estate,
 extern void exec_get_datum_type_info(PLpgSQL_execstate *estate,
 						 PLpgSQL_datum *datum,
 						 Oid *typeid, int32 *typmod, Oid *collation);
+extern void exec_assign_value(PLpgSQL_execstate *estate,
+				  PLpgSQL_datum *target,
+				  Datum value, Oid valtype, bool *isNull);
+extern ParamListInfo setup_param_list(PLpgSQL_execstate *estate,
+				 PLpgSQL_expr *expr);
+
 
 /* ----------
  * Functions for namespace handling in pl_funcs.c

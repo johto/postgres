@@ -1105,9 +1105,10 @@ exec_command(const char *cmd,
 	}
 
 	/* \sf -- show a function's source code */
-	else if (strcmp(cmd, "sf") == 0 || strcmp(cmd, "sf+") == 0)
+	else if (strcmp(cmd, "sf") == 0 || strcmp(cmd, "sf+") == 0 || strcmp(cmd, "sf|") == 0)
 	{
 		bool		show_linenumbers = (strcmp(cmd, "sf+") == 0);
+        bool        copy_to_clipboard = (strcmp(cmd, "sf|") == 0);
 		PQExpBuffer func_buf;
 		char	   *func;
 		Oid			foid = InvalidOid;
@@ -1141,8 +1142,56 @@ exec_command(const char *cmd,
 			FILE	   *output;
 			bool		is_pager;
 
-			/* Select output stream: stdout, pager, or file */
-			if (pset.queryFout == stdout)
+			/* Select output stream: pbcopy, stdout, pager, or file */
+            if (copy_to_clipboard)
+            {
+                int fds[2];
+                pid_t pid;
+
+                if (pipe(fds) < 0)
+                {
+                    fprintf(stderr, "pipe() failed: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+
+                pid = fork();
+                if (pid < 0)
+                {
+                    fprintf(stderr, "fork() failed: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+
+                if (pid == 0)
+                {
+                    char * const args[] = { "/usr/bin/pbcopy", NULL };
+                    close(fds[1]);
+                    close(STDIN_FILENO);
+                    close(STDOUT_FILENO);
+                    close(STDERR_FILENO);
+
+                    if (dup2(fds[0], STDIN_FILENO) < 0)
+                    {
+                        fprintf(stderr, "OMG: %s\n", strerror(errno));
+                        exit(EXIT_FAILURE);
+                    }
+                    execve(args[0], args, NULL);
+                    /* shouldn't get here */
+                    fprintf(stderr, "OMG: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+                else
+                {
+                    write(fds[1], func_buf->data, strlen(func_buf->data));
+                    close(fds[0]);
+                    close(fds[1]);
+                    if (waitpid(pid, NULL, 0) < 0)
+                    {
+                        fprintf(stderr, "failz: %s\n", strerror(errno));
+                        exit(EXIT_FAILURE);
+                    }
+                }
+            }
+            else if (pset.queryFout == stdout)
 			{
 				/* count lines in function to see if pager is needed */
 				int			lineno = 0;
@@ -1210,7 +1259,7 @@ exec_command(const char *cmd,
 					lines = ++eol;
 				}
 			}
-			else
+			else if (!copy_to_clipboard)
 			{
 				/* just send the function definition to output */
 				fputs(func_buf->data, output);
@@ -1224,6 +1273,92 @@ exec_command(const char *cmd,
 			free(func);
 		destroyPQExpBuffer(func_buf);
 	}
+
+    else if (strcmp(cmd, "|") == 0)
+    {
+		PQExpBuffer query_buf;
+        PGresult *res;
+        char *query;
+
+		query_buf = createPQExpBuffer();
+		query = psql_scan_slash_option(scan_state,
+					 				   OT_WHOLE_LINE, NULL, true);
+        if (!query)
+        {
+            psql_error("need query\n");
+            status = PSQL_CMD_ERROR;
+        }
+        else if (!(res = PSQLexec(query, false)))
+        {
+            psql_error("failed\n");
+            status = PSQL_CMD_ERROR;
+        }
+        else
+        {
+            int i, n;
+            int fds[2];
+            pid_t pid;
+
+            for (i = 0; i < PQntuples(res); ++i)
+            {
+                if (i > 0)
+                    appendPQExpBuffer(query_buf, "\n");
+                for (n = 0; n < PQnfields(res); ++n)
+                {
+                    if (n > 0)
+                        appendPQExpBuffer(query_buf, "|");
+                    appendPQExpBuffer(query_buf, "%s", PQgetvalue(res, i, n));
+                }
+            }
+
+            if (pipe(fds) < 0)
+            {
+                fprintf(stderr, "pipe() failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+
+            pid = fork();
+            if (pid < 0)
+            {
+                fprintf(stderr, "fork() failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+
+            if (pid == 0)
+            {
+                char * const args[] = { "/usr/bin/pbcopy", NULL };
+                close(fds[1]);
+                close(STDIN_FILENO);
+                close(STDOUT_FILENO);
+                close(STDERR_FILENO);
+
+                if (dup2(fds[0], STDIN_FILENO) < 0)
+                {
+                    fprintf(stderr, "OMG: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+                execve(args[0], args, NULL);
+                /* shouldn't get here */
+                fprintf(stderr, "OMG: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            else
+            {
+                write(fds[1], query_buf->data, strlen(query_buf->data));
+                close(fds[0]);
+                close(fds[1]);
+                if (waitpid(pid, NULL, 0) < 0)
+                {
+                    fprintf(stderr, "failz: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+            }
+        }
+
+        if (query)
+            free(query);
+		destroyPQExpBuffer(query_buf);
+    }
 
 	/* \t -- turn off headers and row count */
 	else if (strcmp(cmd, "t") == 0)
