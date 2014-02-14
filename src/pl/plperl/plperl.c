@@ -2860,6 +2860,8 @@ plperl_spi_exec(char *query, int limit)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Abort the inner transaction */
@@ -3093,6 +3095,8 @@ plperl_spi_query(char *query)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Abort the inner transaction */
@@ -3179,6 +3183,8 @@ plperl_spi_fetchrow(char *cursor)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Abort the inner transaction */
@@ -3348,6 +3354,8 @@ plperl_spi_prepare(char *query, int argc, SV **argv)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Drop anything we managed to allocate */
@@ -3499,6 +3507,8 @@ plperl_spi_exec_prepared(char *query, HV *attr, int argc, SV **argv)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Abort the inner transaction */
@@ -3628,6 +3638,8 @@ plperl_spi_query_prepared(char *query, int argc, SV **argv)
 		/* Save error info */
 		MemoryContextSwitchTo(oldcontext);
 		edata = CopyErrorData();
+        if (edata->context != NULL)
+            elog(WARNING, "PL/Perl just ate your context and is very sorry about that:\n%s", edata->context);
 		FlushErrorState();
 
 		/* Abort the inner transaction */
