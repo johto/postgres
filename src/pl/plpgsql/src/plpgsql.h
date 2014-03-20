@@ -886,9 +886,10 @@ extern int	plpgsql_variable_conflict;
 extern bool plpgsql_print_strict_params;
 
 /* extra compile-time checks */
-#define PLPGSQL_XCHECK_NONE			0
-#define PLPGSQL_XCHECK_SHADOWVAR	1
-#define PLPGSQL_XCHECK_ALL			((int) ~0)
+#define PLPGSQL_XCHECK_NONE						0
+#define PLPGSQL_XCHECK_SHADOWVAR				1
+#define PLPGSQL_XCHECK_NUM_INTO_EXPRESSIONS		2
+#define PLPGSQL_XCHECK_ALL						((int) ~0)
 
 extern int	plpgsql_extra_warnings;
 extern int	plpgsql_extra_errors;

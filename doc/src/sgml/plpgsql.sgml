@@ -4719,13 +4719,23 @@ a_output := a_output || $$ if v_$$ || referrer_keys.kind || $$ like '$$
   <varname>plpgsql.extra_errors</> for errors. Both can be set either to
   a comma-separated list of checks, <literal>"none"</> or <literal>"all"</>.
   The default is <literal>"none"</>. Currently the list of available checks
-  includes only one:
+  is as follows:
   <variablelist>
    <varlistentry>
     <term><varname>shadowed_variables</varname></term>
     <listitem>
      <para>
       Checks if a declaration shadows a previously defined variable.
+     </para>
+    </listitem>
+   </varlistentry>
+   <varlistentry>
+    <term><varname>num_into_expressions</varname></term>
+    <listitem>
+     <para>
+      When possible, checks that the number of expressions specified in the
+      SELECT or RETURNING list of a query matches the number expected by the
+      INTO target.  This check is done on a "best effort" basis.
      </para>
     </listitem>
    </varlistentry>

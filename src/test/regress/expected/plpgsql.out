@@ -5340,3 +5340,49 @@ NOTICE:  outer_func() done
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+create temporary table somecols(a int, b int);
+set plpgsql.extra_warnings to 'num_into_expressions';
+-- INTO column counts
+create or replace function into_counts()
+returns void as $$
+declare
+  myresult int;
+  myrec record;
+  mycols somecols;
+begin
+  -- no warning
+  select 1 into myresult;
+  -- we don't know the column count without parse analysis, no warning
+  select * into myresult from somecols;
+  -- records are OK
+  select 1, 2 into myrec;
+  -- warning
+  select a, b into myresult from somecols;
+  -- warning
+  select into myresult from somecols;
+  -- no warning
+  select 1, 2 into mycols;
+  -- warning
+  select 1 into mycols;
+  -- warning
+  select 1, 2, 3 into myresult;
+end;
+$$ language plpgsql;
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 15:   select a, b into myresult from somecols;
+           ^
+DETAIL:  INTO target expects 1 expressions, but the query returns 2
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 17:   select into myresult from somecols;
+           ^
+DETAIL:  INTO target expects 1 expressions, but the query returns 0
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 21:   select 1 into mycols;
+           ^
+DETAIL:  INTO target expects 2 expressions, but the query returns 1
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 23:   select 1, 2, 3 into myresult;
+           ^
+DETAIL:  INTO target expects 1 expressions, but the query returns 3
+drop table somecols;
+reset plpgsql.extra_warnings;

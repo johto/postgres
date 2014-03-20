@@ -4193,3 +4193,38 @@ select outer_outer_func(20);
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+
+create temporary table somecols(a int, b int);
+
+set plpgsql.extra_warnings to 'num_into_expressions';
+
+-- INTO column counts
+create or replace function into_counts()
+returns void as $$
+declare
+  myresult int;
+  myrec record;
+  mycols somecols;
+begin
+  -- no warning
+  select 1 into myresult;
+  -- we don't know the column count without parse analysis, no warning
+  select * into myresult from somecols;
+  -- records are OK
+  select 1, 2 into myrec;
+  -- warning
+  select a, b into myresult from somecols;
+  -- warning
+  select into myresult from somecols;
+  -- no warning
+  select 1, 2 into mycols;
+  -- warning
+  select 1 into mycols;
+  -- warning
+  select 1, 2, 3 into myresult;
+end;
+$$ language plpgsql;
+
+drop table somecols;
+
+reset plpgsql.extra_warnings;
