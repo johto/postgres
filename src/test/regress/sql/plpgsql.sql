@@ -4221,7 +4221,7 @@ begin
   -- warning
   select 1 into mycols;
   -- warning
-  select 1, 2, 3 into myresult;
+  select 1, 2, 3 into mycols;
 end;
 $$ language plpgsql;
 
