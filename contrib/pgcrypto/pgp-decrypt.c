@@ -1207,7 +1207,6 @@ parse_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 	int			res;
     struct SignatureData sig;
     bool        want;
-    MBuf        *sigmpi = NULL;
 
 	GETBYTE(pkt, version);
 
@@ -1225,30 +1224,13 @@ parse_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
         goto discard;
 
     /* this is the signature we're looking for */
-    sigmpi = mbuf_create(0);
-    for (;;)
-    {
-        uint8 *buf;
-
-        res = pullf_read(pkt, 8192, &buf);
-        if (res < 0)
-            goto discard;
-        else if (res == 0)
-            break;
-        res = mbuf_append(sigmpi, buf, res);
-        if (res < 0)
-            goto discard;
-    }
-    ctx->sig_expected_mpi = sigmpi;
-    memcpy(ctx->sig_expected_left16, sig.expected_left16, 2);
+    /* TODO: move ton of code to pgp-pubdec.c */
     ctx->sig_version = version;
     ctx->sig_digest_trailer = sig.trailer;
 
-    return 0;
+    return pgp_parse_pubenc_signature(ctx, pkt);
 
 discard:
-    if (sigmpi)
-        mbuf_free(sigmpi);
     mbuf_free(sig.trailer);
     if (res < 0)
         return res;
@@ -1625,6 +1607,7 @@ pgp_verify_signature(PGP_Context *ctx)
     int len;
     uint8 *trailer;
     uint8 digest[PGP_MAX_DIGEST];
+    PX_MD *md = ctx->sig_digest_ctx;
 
     /* TODO ? */
     if (!ctx->sig_onepass || !ctx->sig_digest_ctx)
@@ -1641,8 +1624,8 @@ pgp_verify_signature(PGP_Context *ctx)
         digest_v4_final_trailer(ctx, ctx->sig_digest_ctx);
     px_md_finish(ctx->sig_digest_ctx, digest);
 
-    /* quick check */
-    if (memcmp(digest, ctx->sig_expected_left16, 2) != 0)
+    elog(INFO, "%d %d, %d %d", ctx->sig_expected_digest[0], ctx->sig_expected_digest[1], digest[0], digest[1]);
+    if (memcmp(digest, ctx->sig_expected_digest, px_md_result_size(md)) != 0)
         return PXE_PGP_INVALID_SIGNATURE;
 
     return 0;

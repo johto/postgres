@@ -67,6 +67,40 @@ check_eme_pkcs1_v15(uint8 *data, int len)
 }
 
 /*
+ * padded msg = 01 || PS || 00 || M
+ * PS - pad bytes (FF)
+ * M - msg
+ */
+static uint8 *
+check_emsa_pkcs1_v15(uint8 *data, int len)
+{
+	uint8	   *data_end = data + len;
+	uint8	   *p = data;
+	int			pad = 0;
+
+	if (len < 1 + 8 + 1)
+		return NULL;
+
+	if (*p++ != 1)
+		return NULL;
+
+	while (p < data_end && *p == 0xFF)
+	{
+		p++;
+		pad++;
+	}
+
+	if (p == data_end)
+		return NULL;
+	if (*p != 0)
+		return NULL;
+	if (pad < 8)
+		return NULL;
+	return p + 1;
+}
+
+
+/*
  * secret message: 1 byte algo, sesskey, 2 byte cksum
  * ignore algo in cksum
  */
@@ -121,6 +155,28 @@ out:
 }
 
 static int
+decrypt_rsa_signature(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
+{
+	int			res;
+	PGP_MPI    *c;
+
+	if (pk->algo != PGP_PUB_RSA_ENCRYPT_SIGN
+        && pk->algo != PGP_PUB_RSA_SIGN)
+		return PXE_PGP_WRONG_KEY;
+
+	/* read rsa encrypted data */
+	res = pgp_mpi_read(pkt, &c);
+	if (res < 0)
+		return res;
+
+	/* encrypted using a private key */
+	res = pgp_rsa_encrypt(pk, c, m_p);
+
+	pgp_mpi_free(c);
+	return res;
+}
+
+static int
 decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
@@ -140,6 +196,77 @@ decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 
 	pgp_mpi_free(c);
 	return res;
+}
+
+int
+pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
+{
+    int res;
+    PGP_PubKey *pk = ctx->sig_key;
+    PGP_MPI    *m;
+	uint8	   *msg;
+	int			msglen;
+    uint8 asn1_prefix[PGP_MAX_DIGEST_ASN1_PREFIX];
+    int prefix_len;
+
+
+	if (pk == NULL)
+	{
+		px_debug("no pubkey?");
+		return PXE_BUG;
+	}
+
+	switch (pk->algo)
+	{
+		case PGP_PUB_RSA_ENCRYPT_SIGN:
+			res = decrypt_rsa_signature(pk, pkt, &m);
+			break;
+		default:
+            /* TODO */
+			res = PXE_PGP_UNKNOWN_PUBALGO;
+	}
+	if (res < 0)
+		return res;
+
+	/*
+	 * extract message
+	 */
+	msg = check_emsa_pkcs1_v15(m->data, m->bytes);
+	if (msg == NULL)
+	{
+		px_debug("check_emsa_pkcs1_v15 failed");
+		res = PXE_PGP_WRONG_KEY;
+		goto out;
+	}
+	msglen = m->bytes - (msg - m->data);
+
+    prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
+    /* should have been checked already */
+    if (prefix_len < 0)
+    {
+        res = PXE_BUG;
+        goto out;
+    }
+    if (msglen < prefix_len ||
+        memcmp(msg, asn1_prefix, prefix_len) != 0)
+    {
+        res = PXE_PGP_WRONG_KEY;
+        goto out;
+    }
+    msglen -= prefix_len;
+    if (msglen > PGP_MAX_DIGEST)
+    {
+        res = PXE_PGP_WRONG_KEY;
+        goto out;
+    }
+    /* TODO: check lenght of haxh? */
+    memcpy(ctx->sig_expected_digest, msg + prefix_len, msglen);
+
+out:
+	pgp_mpi_free(m);
+	if (res < 0)
+		return res;
+	return pgp_expect_packet_end(pkt);
 }
 
 /* key id is missing - user is expected to try all keys */
