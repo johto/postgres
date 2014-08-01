@@ -562,9 +562,9 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 	return res;
 }
 
-int
-pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
-			   const uint8 *key, int key_len, int pubtype)
+static int
+set_key(MBuf *keypkt, const uint8 *key, int key_len,
+        int pubtype, PGP_PubKey **pk_p)
 {
 	int			res;
 	PullFilter *src;
@@ -577,8 +577,31 @@ pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
 	res = internal_read_key(src, &pk, key, key_len, pubtype);
 	pullf_free(src);
 
-	if (res >= 0)
-		ctx->pub_key = pk;
+    if (res >= 0)
+    {
+        *pk_p = pk;
+        return 0;
+    }
+    return res;
+}
 
-	return res < 0 ? res : 0;
+int
+pgp_set_sigkey(PGP_Context *ctx, MBuf *keypkt,
+			   const uint8 *key, int key_len, int pubtype)
+{
+    int res;
+
+    res = set_key(keypkt, key, key_len, pubtype, &ctx->sig_key);
+    if (res < 0)
+        return res;
+    if (ctx->sig_key->algo != PGP_PUB_RSA_ENCRYPT_SIGN)
+        return PXE_PGP_UNSUPPORTED_PUBALGO;
+    return 0;
+}
+
+int
+pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
+			   const uint8 *key, int key_len, int pubtype)
+{
+    return set_key(keypkt, key, key_len, pubtype, &ctx->pub_key);
 }

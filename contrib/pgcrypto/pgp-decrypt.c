@@ -48,6 +48,49 @@
 
 #define MAX_CHUNK (16*1024*1024)
 
+/*
+ * Parses a one, two or five-octet length from a packet.  Partial Body Lengths
+ * are not supported.  Returns 0 if EOF was reached when trying to read the
+ * first byte, 1 if the length was read successfully, or < 0 if something went
+ * wrong.
+ */
+static int
+parse_packet_len(PullFilter *src, int *len_p)
+{
+	uint8		b;
+    uint8      *tmpbuf;
+	int			len;
+    int         res;
+
+    res = pullf_read(src, 1, &tmpbuf);
+    if (res <= 0)
+        return res;
+    b = *tmpbuf;
+	if (b <= 191)
+		len = b;
+	else if (b >= 192 && b < 255)
+	{
+		len = ((unsigned) (b) - 192) << 8;
+		GETBYTE(src, b);
+		len += 192 + b;
+	}
+	else
+	{
+        /* b == 255 */
+		GETBYTE(src, b);
+		len = b;
+		GETBYTE(src, b);
+		len = (len << 8) | b;
+		GETBYTE(src, b);
+		len = (len << 8) | b;
+		GETBYTE(src, b);
+		len = (len << 8) | b;
+	}
+
+    *len_p = len;
+    return 1;
+}
+
 static int
 parse_new_len(PullFilter *src, int *len_p)
 {
@@ -805,12 +848,19 @@ parse_literal_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 
 	ctx->unicode_mode = (type == 'u') ? 1 : 0;
 
+    /* hashing context should have been set up for us */
+    if (ctx->sig_key && ctx->sig_digest_ctx == NULL)
+        return PXE_BUG;
+
 	/* read data */
 	while (1)
 	{
 		res = pullf_read(pkt, 32 * 1024, &buf);
 		if (res <= 0)
 			break;
+
+        if (ctx->sig_digest_ctx)
+            px_md_update(ctx->sig_digest_ctx, buf, res);
 
 		if (ctx->text_mode && ctx->convert_crlf)
 			res = copy_crlf(dst, buf, res, &got_cr);
@@ -869,6 +919,343 @@ parse_compressed_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 }
 
 static int
+parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
+{
+    int         version;
+    int         type;
+    int         digestalgo;
+    int         pubkeyalgo;
+    int         last;
+	int			res;
+	uint8		keyid[8];
+
+	GETBYTE(pkt, version);
+	GETBYTE(pkt, type);
+	GETBYTE(pkt, digestalgo);
+	GETBYTE(pkt, pubkeyalgo);
+    res = pullf_read_fixed(pkt, 8, keyid);
+    if (res < 0)
+        return res;
+    GETBYTE(pkt, last);
+
+    if (!ctx->sig_key)
+        return 0;
+
+    /* is this the key we want? */
+    if (memcmp(keyid, ctx->sig_key->key_id, 8) == 0 &&
+        pubkeyalgo == ctx->sig_key->algo)
+    {
+        /* TODO: verify that we support the digest algo */
+        ctx->digest_algo = digestalgo;
+        ctx->sig_onepass = 1;
+        res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
+        if (res < 0)
+            return res;
+    }
+
+	return 0;
+}
+
+struct SigSubPktParserState {
+    bool hashed_done;
+    bool done;
+    int lr_len;
+    PullFilter *lr;
+    PullFilter *hashed_src;
+    PullFilter *unhashed_src;
+};
+
+struct SigSubPkt {
+    int len;
+    int type;
+    bool hashed;
+    PullFilter *body;
+};
+
+static int
+start_section(struct SigSubPktParserState *pstate, bool hashed)
+{
+    int res;
+    int len;
+    PullFilter *src;
+
+    if (hashed)
+        src = pstate->hashed_src;
+    else
+        src = pstate->unhashed_src;
+
+    res = parse_old_len(src, &len, 1);
+    if (res < 0)
+        return res;
+    /* hashed section MUST be present */
+    if (hashed && len == 0)
+        return -6000; /* TODO */
+    pstate->lr_len = len;
+    res = pullf_create_limited_reader(&pstate->lr, src, &pstate->lr_len);
+    if (res < 0)
+        return res;
+    return 0;
+}
+
+/*
+ * Initializes a parser for parsing the subpackets in a version 4 signature
+ * packet.  hashed_src is used for parsing the hashed subpackets, and
+ * unhashed_src is used for reading the unhashed ones.  Returns < 0 on failure.
+ * The caller never has to worry about releasing the parse state.
+ */
+static int
+init_sigsubpkt_parser(PullFilter *hashed_src, PullFilter *unhashed_src, struct SigSubPktParserState *pstate)
+{
+    pstate->hashed_done = false;
+    pstate->done = false;
+    pstate->lr = NULL;
+    pstate->hashed_src = hashed_src;
+    pstate->unhashed_src = unhashed_src;
+
+    return start_section(pstate, true);
+}
+
+/*
+ * Releases any memory allocated by the signature subpacket parser.  You only
+ * need to call this function if you want to stop reading before you've reached
+ * the last subpacket.
+ */
+static void
+destroy_sigsubpkt_parser(struct SigSubPktParserState *pstate)
+{
+    if (pstate->lr)
+    {
+        pullf_free(pstate->lr);
+        pstate->lr = NULL;
+    }
+}
+
+/*
+ * Reads the next subpacket's header from state to subpkt.  Returns 1 if a
+ * packet was read, 0 if all subpackets have been successfully read from the
+ * signature packet, or < 0 on error.
+ */
+static int
+sigsubpkt_parser_next(struct SigSubPktParserState *pstate, struct SigSubPkt *subpkt)
+{
+    uint8 typ;
+    int len;
+    int res;
+
+    if (pstate->done || pstate->lr == NULL)
+        return PXE_BUG;
+
+again:
+    res = parse_packet_len(pstate->lr, &len);
+    if (res < 0)
+        goto err;
+    else if (res == 0)
+    {
+        /* no more subpackets in this section */
+
+        if (pstate->hashed_done)
+        {
+            pstate->done = true;
+            pullf_free(pstate->lr);
+            pstate->lr = NULL;
+            return 0;
+        }
+        pstate->hashed_done = true;
+        res = start_section(pstate, false);
+        if (res < 0)
+            goto err;
+        else
+        {
+            /* read the first packet of the unhashed section */
+            goto again;
+        }
+    }
+
+    res = pullf_read_fixed(pstate->lr, 1, &typ);
+    if (res < 0)
+        goto err;
+    len--;
+
+    /* done; let the caller read the data */
+    subpkt->len = len;
+    subpkt->type = typ;
+    subpkt->hashed = !pstate->hashed_done;
+    subpkt->body = pstate->lr;
+
+err:
+    if (res < 0)
+    {
+        pullf_free(pstate->lr);
+        pstate->lr = NULL;
+        return res;
+    }
+    return 1;
+}
+
+struct SignatureData {
+    uint8 creation_time[4];
+    uint8 keyid[8];
+    uint8 expected_left16[2];
+    uint8 algo;
+    uint8 digest_algo;
+    uint8 type;
+    MBuf *trailer;
+};
+
+static int
+parse_v3_signature_header(PGP_Context *ctx, PullFilter *pkt, struct SignatureData *sig)
+{
+    elog(ERROR, "TODO");
+}
+
+static int
+parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, struct SignatureData *sig)
+{
+    int res;
+    uint8 version;
+
+    struct SigSubPktParserState pstate;
+    bool found_creation_time = false;
+    bool found_issuer = false;
+    PullFilter  *tr = NULL;
+
+    /*
+     * In a V4 header, we need to store the everything up to the end of the
+     * hashed subpackets for the hash trailer.
+     */
+    version = 4;
+    mbuf_append(sig->trailer, &version, 1);
+    res = pullf_create_tee_reader(&tr, pkt, sig->trailer);
+    if (res < 0)
+        return res;
+
+    res = pullf_read_fixed(tr, 1, &sig->type);
+    if (res < 0)
+        goto err;
+    res = pullf_read_fixed(tr, 1, &sig->algo);
+    if (res < 0)
+        goto err;
+    res = pullf_read_fixed(tr, 1, &sig->digest_algo);
+    if (res < 0)
+        goto err;
+
+    res = init_sigsubpkt_parser(tr, pkt, &pstate);
+    if (res < 0)
+        goto err;
+
+    for (;;)
+    {
+        struct SigSubPkt subpkt;
+
+        res = sigsubpkt_parser_next(&pstate, &subpkt);
+        if (res < 0)
+            goto err;
+        else if (res == 0)
+            break;
+
+        if (subpkt.hashed && subpkt.type == PGP_SIGNATURE_CREATION_TIME)
+        {
+            if (found_creation_time || subpkt.len != 4)
+            {
+                res = PXE_PGP_CORRUPT_DATA;
+                goto err;
+            }
+            found_creation_time = true;
+            res = pullf_read_fixed(subpkt.body, 4, sig->creation_time);
+            if (res < 0)
+                goto err;
+        }
+        else if (subpkt.type == PGP_ISSUER_ID)
+        {
+            if (found_issuer || subpkt.len != 8)
+            {
+                res = PXE_PGP_CORRUPT_DATA;
+                goto err;
+            }
+            found_issuer = true;
+            res = pullf_read_fixed(subpkt.body, 8, sig->keyid);
+            if (res < 0)
+                goto err;
+        }
+        else
+        {
+            /* unknown subpacket; skip over the data */
+            res = pullf_discard(subpkt.body, subpkt.len);
+            if (res == PXE_MBUF_SHORT_READ)
+                res = PXE_PGP_CORRUPT_DATA; /* XXX should we bother? */
+            if (res < 0)
+                goto err;
+        }
+    }
+
+    res = pullf_read_fixed(pkt, 2, sig->expected_left16);
+
+err:
+    destroy_sigsubpkt_parser(&pstate);
+    if (tr)
+        pullf_free(tr);
+    if (res < 0)
+        return res;
+
+    return 0;
+}
+
+static int
+parse_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
+{
+    int         version;
+	int			res;
+    struct SignatureData sig;
+    bool        want;
+    MBuf        *sigmpi = NULL;
+
+	GETBYTE(pkt, version);
+
+    memset(&sig, 0, sizeof(sig));
+    sig.trailer = mbuf_create(0);
+    if (version == 3)
+        res = parse_v3_signature_header(ctx, pkt, &sig);
+    else if (version == 4)
+        res = parse_v4_signature_header(ctx, pkt, &sig);
+
+    want = (memcmp(sig.keyid, ctx->sig_key->key_id, 8) == 0) &&
+            sig.algo == ctx->sig_key->algo;
+    px_memset(sig.keyid, 0, 8);
+    if (res < 0 || !want)
+        goto discard;
+
+    /* this is the signature we're looking for */
+    sigmpi = mbuf_create(0);
+    for (;;)
+    {
+        uint8 *buf;
+
+        res = pullf_read(pkt, 8192, &buf);
+        if (res < 0)
+            goto discard;
+        else if (res == 0)
+            break;
+        res = mbuf_append(sigmpi, buf, res);
+        if (res < 0)
+            goto discard;
+    }
+    ctx->sig_expected_mpi = sigmpi;
+    memcpy(ctx->sig_expected_left16, sig.expected_left16, 2);
+    ctx->sig_version = version;
+    ctx->sig_digest_trailer = sig.trailer;
+
+    return 0;
+
+discard:
+    if (sigmpi)
+        mbuf_free(sigmpi);
+    mbuf_free(sig.trailer);
+    if (res < 0)
+        return res;
+    return pullf_discard(pkt, -1);
+}
+
+static int
 process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 					 int allow_compr, int need_mdc)
 {
@@ -906,8 +1293,16 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 		switch (tag)
 		{
 			case PGP_PKT_LITERAL_DATA:
-				got_data = 1;
-				res = parse_literal_data(ctx, dst, pkt);
+                if (!ctx->sig_onepass)
+                {
+                    px_debug("no usable one-pass signatures found");
+                    res = PXE_PGP_NO_USABLE_SIGNATURE;
+                }
+                else
+                {
+                    got_data = 1;
+                    res = parse_literal_data(ctx, dst, pkt);
+                }
 				break;
 			case PGP_PKT_COMPRESSED_DATA:
 				if (allow_compr == 0)
@@ -923,7 +1318,12 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 					px_debug("process_data_packets: only one cmpr pkt allowed");
 					res = PXE_PGP_CORRUPT_DATA;
 				}
-				else
+				else if (!ctx->sig_onepass)
+                {
+                    px_debug("no usable one-pass signatures found");
+                    res = PXE_PGP_NO_USABLE_SIGNATURE;
+                }
+                else
 				{
 					got_data = 1;
 					res = parse_compressed_data(ctx, dst, pkt);
@@ -944,6 +1344,12 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 				if (res > 0)
 					got_mdc = 1;
 				break;
+            case PGP_PKT_ONEPASS_SIGNATURE:
+                res = parse_onepass_signature(ctx, dst, pkt);
+                break;
+            case PGP_PKT_SIGNATURE:
+                res = parse_signature(ctx, dst, pkt);
+                break;
 			default:
 				px_debug("process_data_packets: unexpected pkt tag=%d", tag);
 				res = PXE_PGP_CORRUPT_DATA;
@@ -1187,3 +1593,58 @@ pgp_decrypt(PGP_Context *ctx, MBuf *msrc, MBuf *mdst)
 
 	return res;
 }
+
+static void
+digest_v4_final_trailer(PGP_Context *ctx, PX_MD *md)
+{
+    uint8 b;
+    int len;
+
+    /* two magic octets, per spec */
+    b = 0x04;
+    px_md_update(md, &b, 1);
+    b = 0xFF;
+    px_md_update(md, &b, 1);
+
+    /* length of trailer, four octets in big endian */
+    len = mbuf_size(ctx->sig_digest_trailer);
+    b = (len >> 24);
+    px_md_update(md, &b, 1);
+    b = (len >> 16) & 0xFF;
+    px_md_update(md, &b, 1);
+    b = (len >> 8) & 0xFF;
+    px_md_update(md, &b, 1);
+    b = len & 0xFF;
+    px_md_update(md, &b, 1);
+}
+
+int
+pgp_verify_signature(PGP_Context *ctx)
+{
+	int			res;
+    int len;
+    uint8 *trailer;
+    uint8 digest[PGP_MAX_DIGEST];
+
+    /* TODO ? */
+    if (!ctx->sig_onepass || !ctx->sig_digest_ctx)
+        return PXE_PGP_NO_USABLE_SIGNATURE;
+
+    if (ctx->sig_version != 3 && ctx->sig_version != 4)
+        return PXE_BUG;
+    if (!ctx->sig_digest_trailer)
+        return PXE_BUG;
+
+    len = mbuf_grab(ctx->sig_digest_trailer, mbuf_avail(ctx->sig_digest_trailer), &trailer);
+    px_md_update(ctx->sig_digest_ctx, trailer, len);
+    if (ctx->sig_version == 4)
+        digest_v4_final_trailer(ctx, ctx->sig_digest_ctx);
+    px_md_finish(ctx->sig_digest_ctx, digest);
+
+    /* quick check */
+    if (memcmp(digest, ctx->sig_expected_left16, 2) != 0)
+        return PXE_PGP_INVALID_SIGNATURE;
+
+    return 0;
+}
+
