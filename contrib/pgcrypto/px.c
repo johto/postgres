@@ -86,8 +86,8 @@ static const struct error_desc px_err_list[] = {
 	{PXE_PGP_BAD_S2K_MODE, "Bad S2K mode"},
 	{PXE_PGP_UNSUPPORTED_PUBALGO, "Unsupported public key algorithm"},
 	{PXE_PGP_MULTIPLE_SUBKEYS, "Several subkeys not supported"},
-    {PXE_PGP_NO_USABLE_SIGNATURE, "No usable signature in the message"},
-    {PXE_PGP_INVALID_SIGNATURE, "Signature does not match"},
+	{PXE_PGP_NO_USABLE_SIGNATURE, "No usable signature in the message"},
+	{PXE_PGP_INVALID_SIGNATURE, "Signature does not match"},
 
 	/* fake this as PXE_PGP_CORRUPT_DATA */
 	{PXE_MBUF_SHORT_READ, "Corrupt data"},

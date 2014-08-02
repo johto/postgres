@@ -225,8 +225,8 @@ set_arg(PGP_Context *ctx, char *key, char *val,
 
 	if (strcmp(key, "cipher-algo") == 0)
 		res = pgp_set_cipher_algo(ctx, val);
-    else if (strcmp(key, "digest-algo") == 0)
-        res = pgp_set_digest_algo(ctx, val);
+	else if (strcmp(key, "digest-algo") == 0)
+		res = pgp_set_digest_algo(ctx, val);
 	else if (strcmp(key, "disable-mdc") == 0)
 		res = pgp_disable_mdc(ctx, atoi(val));
 	else if (strcmp(key, "sess-key") == 0)
@@ -255,7 +255,7 @@ set_arg(PGP_Context *ctx, char *key, char *val,
 	}
 	else if (ex != NULL && strcmp(key, "expect-digest-algo") == 0)
 	{
-        elog(ERROR, "XXX TODO ");
+		elog(ERROR, "XXX TODO ");
 		ex->expect = 1;
 		ex->cipher_algo = pgp_get_cipher_code(val);
 	}
@@ -425,7 +425,7 @@ init_work(PGP_Context **ctx_p, int is_text,
 static bytea *
 encrypt_internal(int is_pubenc, int is_text,
 				 text *data, text *key, text *sigkey,
-                 text *keypsw, text *args)
+				 text *keypsw, text *args)
 {
 	MBuf	   *src,
 			   *dst;
@@ -472,32 +472,32 @@ encrypt_internal(int is_pubenc, int is_text,
 		err = pgp_set_pubkey(ctx, kbuf,
 							 NULL, 0, 0);
 		mbuf_free(kbuf);
-        if (err < 0)
-            goto error;
+		if (err < 0)
+			goto error;
 
-        if (sigkey)
-        {
-            if (keypsw)
-                elog(ERROR, "TODO");
-            kbuf = create_mbuf_from_vardata(sigkey);
-            err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 1);
-            mbuf_free(kbuf);
-            if (err < 0)
-                goto error;
-        }
+		if (sigkey)
+		{
+			if (keypsw)
+				elog(ERROR, "TODO");
+			kbuf = create_mbuf_from_vardata(sigkey);
+			err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 1);
+			mbuf_free(kbuf);
+			if (err < 0)
+				goto error;
+		}
 	}
 	else
-    {
+	{
 		err = pgp_set_symkey(ctx, (uint8 *) VARDATA(key),
 							 VARSIZE(key) - VARHDRSZ);
-        if (err < 0)
-            goto error;
-    }
+		if (err < 0)
+			goto error;
+	}
 
 	/*
 	 * encrypt
 	 */
-    err = pgp_encrypt(ctx, src, dst);
+	err = pgp_encrypt(ctx, src, dst);
 
 	/*
 	 * check for error
@@ -535,8 +535,8 @@ error:
 
 static void hndl(const char *msg)
 {
-    /* REMOVE ME */
-    elog(ERROR, "%s", msg);
+	/* REMOVE ME */
+	elog(ERROR, "%s", msg);
 }
 
 static bytea *
@@ -554,7 +554,7 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 	struct debug_expect ex;
 	int			got_unicode = 0;
 
-    px_set_debug_handler(hndl);
+	px_set_debug_handler(hndl);
 
 
 	init_work(&ctx, need_text, args, &ex);
@@ -586,40 +586,40 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 		err = pgp_set_pubkey(ctx, kbuf, psw, psw_len, 1);
 		mbuf_free(kbuf);
 
-        if (err < 0)
-            goto out;
+		if (err < 0)
+			goto out;
 
-        if (sigkey)
-        {
-            kbuf = create_mbuf_from_vardata(sigkey);
-            err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0);
-            mbuf_free(kbuf);
-            if (err < 0)
-                goto out;
-        }
+		if (sigkey)
+		{
+			kbuf = create_mbuf_from_vardata(sigkey);
+			err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0);
+			mbuf_free(kbuf);
+			if (err < 0)
+				goto out;
+		}
 
 	}
 	else
-    {
+	{
 		err = pgp_set_symkey(ctx, (uint8 *) VARDATA(key),
 							 VARSIZE(key) - VARHDRSZ);
-        if (err < 0)
-            goto out;
-    }
+		if (err < 0)
+			goto out;
+	}
 
 	/*
 	 * decrypt
 	 */
-    err = pgp_decrypt(ctx, src, dst);
+	err = pgp_decrypt(ctx, src, dst);
 	if (err < 0)
 		goto out;
 
-    if (ctx->sig_key)
-    {
-        err = pgp_verify_signature(ctx, dst);
-        if (err < 0)
-            goto out;
-    }
+	if (ctx->sig_key)
+	{
+		err = pgp_verify_signature(ctx, dst);
+		if (err < 0)
+			goto out;
+	}
 
 	if (ex.expect)
 		check_expect(ctx, &ex);
@@ -771,27 +771,27 @@ pgp_pub_encrypt_sign_bytea(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
-               *sigkey;
+			   *sigkey;
 	text	   *psw = NULL,
-               *arg = NULL;
+			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-    sigkey = PG_GETARG_BYTEA_P(2);
+	sigkey = PG_GETARG_BYTEA_P(2);
 	if (PG_NARGS() > 3)
-        psw = PG_GETARG_BYTEA_P(3);
-    if (PG_NARGS() > 4)
+		psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
 	res = encrypt_internal(1, 0, data, key, sigkey, psw, arg);
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-    PG_FREE_IF_COPY(sigkey, 2);
+	PG_FREE_IF_COPY(sigkey, 2);
 	if (PG_NARGS() > 3)
 		PG_FREE_IF_COPY(psw, 3);
-    if (PG_NARGS() > 4)
+	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
 }
@@ -845,14 +845,14 @@ pgp_pub_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
-               *sigkey;
+			   *sigkey;
 	text	   *psw = NULL,
 			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-    sigkey = PG_GETARG_BYTEA_P(2);
+	sigkey = PG_GETARG_BYTEA_P(2);
 	if (PG_NARGS() > 3)
 		psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
@@ -862,7 +862,7 @@ pgp_pub_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-    PG_FREE_IF_COPY(sigkey, 2);
+	PG_FREE_IF_COPY(sigkey, 2);
 	if (PG_NARGS() > 3)
 		PG_FREE_IF_COPY(psw, 3);
 	if (PG_NARGS() > 4)

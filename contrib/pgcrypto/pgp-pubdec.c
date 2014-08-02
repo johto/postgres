@@ -131,8 +131,8 @@ static int
 decrypt_elgamal(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
-	PGP_MPI    *c1 = NULL;
-	PGP_MPI    *c2 = NULL;
+	PGP_MPI	*c1 = NULL;
+	PGP_MPI	*c2 = NULL;
 
 	if (pk->algo != PGP_PUB_ELG_ENCRYPT)
 		return PXE_PGP_WRONG_KEY;
@@ -158,10 +158,10 @@ static int
 decrypt_rsa_signature(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
-	PGP_MPI    *c;
+	PGP_MPI	*c;
 
 	if (pk->algo != PGP_PUB_RSA_ENCRYPT_SIGN
-        && pk->algo != PGP_PUB_RSA_SIGN)
+		&& pk->algo != PGP_PUB_RSA_SIGN)
 		return PXE_PGP_WRONG_KEY;
 
 	/* read rsa encrypted data */
@@ -180,7 +180,7 @@ static int
 decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
-	PGP_MPI    *c;
+	PGP_MPI	*c;
 
 	if (pk->algo != PGP_PUB_RSA_ENCRYPT
 		&& pk->algo != PGP_PUB_RSA_ENCRYPT_SIGN)
@@ -201,13 +201,13 @@ decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 int
 pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
 {
-    int res;
-    PGP_PubKey *pk = ctx->sig_key;
-    PGP_MPI    *m;
+	int res;
+	PGP_PubKey *pk = ctx->sig_key;
+	PGP_MPI	*m;
 	uint8	   *msg;
 	int			msglen;
-    uint8 asn1_prefix[PGP_MAX_DIGEST_ASN1_PREFIX];
-    int prefix_len;
+	uint8 asn1_prefix[PGP_MAX_DIGEST_ASN1_PREFIX];
+	int prefix_len;
 
 
 	if (pk == NULL)
@@ -222,7 +222,7 @@ pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
 			res = decrypt_rsa_signature(pk, pkt, &m);
 			break;
 		default:
-            /* TODO */
+			/* TODO */
 			res = PXE_PGP_UNKNOWN_PUBALGO;
 	}
 	if (res < 0)
@@ -240,27 +240,27 @@ pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
 	}
 	msglen = m->bytes - (msg - m->data);
 
-    prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
-    /* should have been checked already */
-    if (prefix_len < 0)
-    {
-        res = PXE_BUG;
-        goto out;
-    }
-    if (msglen < prefix_len ||
-        memcmp(msg, asn1_prefix, prefix_len) != 0)
-    {
-        res = PXE_PGP_WRONG_KEY;
-        goto out;
-    }
-    msglen -= prefix_len;
-    if (msglen > PGP_MAX_DIGEST)
-    {
-        res = PXE_PGP_WRONG_KEY;
-        goto out;
-    }
-    /* TODO: check lenght of haxh? */
-    memcpy(ctx->sig_expected_digest, msg + prefix_len, msglen);
+	prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
+	/* should have been checked already */
+	if (prefix_len < 0)
+	{
+		res = PXE_BUG;
+		goto out;
+	}
+	if (msglen < prefix_len ||
+		memcmp(msg, asn1_prefix, prefix_len) != 0)
+	{
+		res = PXE_PGP_WRONG_KEY;
+		goto out;
+	}
+	msglen -= prefix_len;
+	if (msglen > PGP_MAX_DIGEST)
+	{
+		res = PXE_PGP_WRONG_KEY;
+		goto out;
+	}
+	/* TODO: check lenght of haxh? */
+	memcpy(ctx->sig_expected_digest, msg + prefix_len, msglen);
 
 out:
 	pgp_mpi_free(m);
@@ -283,7 +283,7 @@ pgp_parse_pubenc_sesskey(PGP_Context *ctx, PullFilter *pkt)
 	PGP_PubKey *pk;
 	uint8	   *msg;
 	int			msglen;
-	PGP_MPI    *m;
+	PGP_MPI	*m;
 
 	pk = ctx->pub_key;
 	if (pk == NULL)

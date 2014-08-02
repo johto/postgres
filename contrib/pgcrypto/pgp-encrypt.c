@@ -163,43 +163,43 @@ sig_writer_write(PushFilter *dst, void *priv, const uint8 *data, int len)
 static int
 sig_writer_flush(PushFilter *dst, void *priv)
 {
-    PGP_Context *ctx = priv;
-    int res;
-    int len;
-    MBuf *buf = NULL;
-    PushFilter *pf = NULL;
-    uint8 *data = NULL;
+	PGP_Context *ctx = priv;
+	int res;
+	int len;
+	MBuf *buf = NULL;
+	PushFilter *pf = NULL;
+	uint8 *data = NULL;
 
-    /*
-     * Capture all the data into an mbuf so we don't have to worry about the
-     * length of the packet.
-     */
-    buf = mbuf_create(4096);
-    res = pushf_create_mbuf_writer(&pf, buf);
-    if (res < 0)
-        goto err;
+	/*
+	 * Capture all the data into an mbuf so we don't have to worry about the
+	 * length of the packet.
+	 */
+	buf = mbuf_create(4096);
+	res = pushf_create_mbuf_writer(&pf, buf);
+	if (res < 0)
+		goto err;
 
-    res = pgp_write_pubenc_signature(ctx, pf);
-    if (res < 0)
-        goto err;
+	res = pgp_write_pubenc_signature(ctx, pf);
+	if (res < 0)
+		goto err;
 
-    len = mbuf_grab(buf, mbuf_avail(buf), &data);
-    res = write_normal_header(dst, PGP_PKT_SIGNATURE, len);
-    if (res < 0)
-        goto err;
+	len = mbuf_grab(buf, mbuf_avail(buf), &data);
+	res = write_normal_header(dst, PGP_PKT_SIGNATURE, len);
+	if (res < 0)
+		goto err;
 
-    res = pushf_write(dst, data, len);
+	res = pushf_write(dst, data, len);
 
 err:
-    if (pf)
-        pushf_free(pf);
-    if (buf)
-        mbuf_free(buf);
-    return res;
+	if (pf)
+		pushf_free(pf);
+	if (buf)
+		mbuf_free(buf);
+	return res;
 }
 
 static const PushFilterOps sig_writer_filter = {
-    sig_writer_init, sig_writer_write, sig_writer_flush, NULL
+	sig_writer_init, sig_writer_write, sig_writer_flush, NULL
 };
 
 
@@ -211,7 +211,7 @@ static int
 sig_compute_init(PushFilter *dst, void *init_arg, void **priv_p)
 {
 	int			res;
-    PGP_Context *ctx = init_arg;
+	PGP_Context *ctx = init_arg;
 
 	res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
 	if (res < 0)
@@ -224,7 +224,7 @@ sig_compute_init(PushFilter *dst, void *init_arg, void **priv_p)
 static int
 sig_compute_write(PushFilter *dst, void *priv, const uint8 *data, int len)
 {
-    PX_MD *md = priv;
+	PX_MD *md = priv;
 
 	px_md_update(md, data, len);
 	return pushf_write(dst, data, len);
@@ -239,7 +239,7 @@ sig_compute_free(void *priv)
 }
 
 static const PushFilterOps sig_compute_filter = {
-    sig_compute_init, sig_compute_write, NULL, sig_compute_free
+	sig_compute_init, sig_compute_write, NULL, sig_compute_free
 };
 
 
@@ -250,7 +250,7 @@ static const PushFilterOps sig_compute_filter = {
 #define ENCBUF 8192
 struct EncStat
 {
-	PGP_CFB    *ciph;
+	PGP_CFB	*ciph;
 	uint8		buf[ENCBUF];
 };
 
@@ -259,7 +259,7 @@ encrypt_init(PushFilter *next, void *init_arg, void **priv_p)
 {
 	struct EncStat *st;
 	PGP_Context *ctx = init_arg;
-	PGP_CFB    *ciph;
+	PGP_CFB	*ciph;
 	int			resync = 1;
 	int			res;
 
@@ -599,29 +599,29 @@ write_prefix(PGP_Context *ctx, PushFilter *dst)
 static int
 init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
 {
-    int res;
-    uint8 hdr[4];
-    uint8 ver = 3;
-    uint8 last = 1;
+	int res;
+	uint8 hdr[4];
+	uint8 ver = 3;
+	uint8 last = 1;
 
 	res = write_normal_header(dst, PGP_PKT_ONEPASS_SIGNATURE, 4 + 8 + 1);
-    if (res < 0)
-        return res;
-    hdr[0] = ver;
-    hdr[1] = 0x00; /* key type, TODO? */
-    hdr[2] = ctx->digest_algo;
-    hdr[3] = PGP_PUB_RSA_ENCRYPT_SIGN;
-    res = pushf_write(dst, hdr, sizeof(hdr));
-    if (res < 0)
-        return res;
+	if (res < 0)
+		return res;
+	hdr[0] = ver;
+	hdr[1] = 0x00; /* key type, TODO? */
+	hdr[2] = ctx->digest_algo;
+	hdr[3] = PGP_PUB_RSA_ENCRYPT_SIGN;
+	res = pushf_write(dst, hdr, sizeof(hdr));
+	if (res < 0)
+		return res;
 
-    res = pushf_write(dst, ctx->sig_key->key_id, 8);
-    if (res < 0)
-        return res;
-    res = pushf_write(dst, &last, 1); /* no more one-pass signatures */
-    if (res < 0)
-        return res;
-    return pushf_create(pf_res, &sig_writer_filter, ctx, dst);
+	res = pushf_write(dst, ctx->sig_key->key_id, 8);
+	if (res < 0)
+		return res;
+	res = pushf_write(dst, &last, 1); /* no more one-pass signatures */
+	if (res < 0)
+		return res;
+	return pushf_create(pf_res, &sig_writer_filter, ctx, dst);
 }
 
 
@@ -633,7 +633,7 @@ static int
 symencrypt_sesskey(PGP_Context *ctx, uint8 *dst)
 {
 	int			res;
-	PGP_CFB    *cfb;
+	PGP_CFB	*cfb;
 	uint8		algo = ctx->cipher_algo;
 
 	res = pgp_cfb_create(&cfb, ctx->s2k_cipher_algo,
@@ -809,14 +809,14 @@ pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst)
 		pf = pf_tmp;
 	}
 
-    /* TODO */
-    if (ctx->sig_key)
-    {
-        res = init_onepass_signature(&pf_tmp, ctx, pf);
-        if (res < 0)
-            goto out;
-        pf = pf_tmp;
-    }
+	/* TODO */
+	if (ctx->sig_key)
+	{
+		res = init_onepass_signature(&pf_tmp, ctx, pf);
+		if (res < 0)
+			goto out;
+		pf = pf_tmp;
+	}
 
 	/* data streamer */
 	res = init_litdata_packet(&pf_tmp, ctx, pf);
@@ -824,17 +824,17 @@ pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst)
 		goto out;
 	pf = pf_tmp;
 
-    /*
-     * If we're writing a signature, also add the signature computation filter
-     * right after the text mode canonicalization, if there is one.
-     */
-    if (ctx->sig_key)
-    {
-        res = pushf_create(&pf_tmp, &sig_compute_filter, ctx, pf);
-        if (res < 0)
-            goto out;
-        pf = pf_tmp;
-    }
+	/*
+	 * If we're writing a signature, also add the signature computation filter
+	 * right after the text mode canonicalization, if there is one.
+	 */
+	if (ctx->sig_key)
+	{
+		res = pushf_create(&pf_tmp, &sig_compute_filter, ctx, pf);
+		if (res < 0)
+			goto out;
+		pf = pf_tmp;
+	}
 
 	/* text conversion? */
 	if (ctx->text_mode && ctx->convert_crlf)

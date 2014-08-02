@@ -340,37 +340,37 @@ pullf_read_fixed(PullFilter *src, int len, uint8 *dst)
 int
 pullf_discard(PullFilter *src, int max)
 {
-    int res;
-    uint8 *tmp;
-    int read = 0;
+	int res;
+	uint8 *tmp;
+	int read = 0;
 
-    if (max == -1)
-    {
-        for (;;)
-        {
-            res = pullf_read(src, 8192, &tmp);
-            if (res == 0)
-                return read;
-            else if (res < 0)
-                return res;
-            read += res;
-        }
-    }
-    else
-    {
-        for (;;)
-        {
-            if (read == max)
-                return read;
+	if (max == -1)
+	{
+		for (;;)
+		{
+			res = pullf_read(src, 8192, &tmp);
+			if (res == 0)
+				return read;
+			else if (res < 0)
+				return res;
+			read += res;
+		}
+	}
+	else
+	{
+		for (;;)
+		{
+			if (read == max)
+				return read;
 
-            res = pullf_read(src, max - read, &tmp);
-            if (res == 0)
-                return PXE_MBUF_SHORT_READ;
-            else if (res < 0)
-                return res;
-            read += res;
-        }
-    }
+			res = pullf_read(src, max - read, &tmp);
+			if (res == 0)
+				return PXE_MBUF_SHORT_READ;
+			else if (res < 0)
+				return res;
+			read += res;
+		}
+	}
 }
 
 /*
@@ -380,7 +380,7 @@ static int
 pull_from_mbuf(void *arg, PullFilter *src, int len,
 			   uint8 **data_p, uint8 *buf, int buflen)
 {
-    MBuf       *mbuf = arg;
+	MBuf	   *mbuf = arg;
 
 	return mbuf_grab(mbuf, len, data_p);
 }
@@ -401,35 +401,35 @@ pullf_create_mbuf_reader(PullFilter **mp_p, MBuf *src)
 
 static int
 limited_reader_pull(void *arg, PullFilter *src, int len,
-                    uint8 **data_p, uint8 *buf, int buflen)
+					uint8 **data_p, uint8 *buf, int buflen)
 {
-    int *limit = arg;
-    int res;
+	int *limit = arg;
+	int res;
 
-    if (*limit == 0)
-        return 0;
-    if (len > *limit)
-        return PXE_MBUF_SHORT_READ;
-    res = pullf_read(src, len, data_p);
-    if (res > 0)
-    {
-        *limit -= res;
-        if (*limit < 0)
-            return PXE_MBUF_SHORT_READ;
-    }
-    else if (res == 0)
-        return PXE_MBUF_SHORT_READ;
-    return res;
+	if (*limit == 0)
+		return 0;
+	if (len > *limit)
+		return PXE_MBUF_SHORT_READ;
+	res = pullf_read(src, len, data_p);
+	if (res > 0)
+	{
+		*limit -= res;
+		if (*limit < 0)
+			return PXE_MBUF_SHORT_READ;
+	}
+	else if (res == 0)
+		return PXE_MBUF_SHORT_READ;
+	return res;
 }
 
 static const struct PullFilterOps limited_reader = {
-    NULL, limited_reader_pull, NULL
+	NULL, limited_reader_pull, NULL
 };
 
 int
 pullf_create_limited_reader(PullFilter **mp_p, PullFilter *src, int *limit)
 {
-    return pullf_create(mp_p, &limited_reader, limit, src);
+	return pullf_create(mp_p, &limited_reader, limit, src);
 }
 
 /*
@@ -437,20 +437,20 @@ pullf_create_limited_reader(PullFilter **mp_p, PullFilter *src, int *limit)
  */
 static int
 tee_reader_pull(void *arg, PullFilter *src, int len,
-			    uint8 **data_p, uint8 *buf, int buflen)
+				uint8 **data_p, uint8 *buf, int buflen)
 {
-    MBuf       *mbuf = arg;
-    int res;
-    int res2;
+	MBuf	   *mbuf = arg;
+	int res;
+	int res2;
 
-    res = pullf_read(src, len, data_p);
-    if (res <= 0)
-        return res;
-    res2 = mbuf_append(mbuf, *data_p, res);
-    if (res2 < 0)
-        return res2;
-    /* return the number of bytes read */
-    return res;
+	res = pullf_read(src, len, data_p);
+	if (res <= 0)
+		return res;
+	res2 = mbuf_append(mbuf, *data_p, res);
+	if (res2 < 0)
+		return res2;
+	/* return the number of bytes read */
+	return res;
 }
 
 static const struct PullFilterOps tee_reader = {

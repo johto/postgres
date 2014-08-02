@@ -174,11 +174,11 @@ create_signature_vessel(PGP_Context *ctx, uint8 *data, int klen, PGP_MPI **msg_p
 	PGP_MPI *m = NULL;
 
 	prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
-    /* sanity check; this should have been checked already */
-    if (prefix_len < 0)
-        /* WTF */
-        //return prefix_len;
-        return PXE_BUG;
+	/* sanity check; this should have been checked already */
+	if (prefix_len < 0)
+		/* WTF */
+		//return prefix_len;
+		return PXE_BUG;
 
 	vessel = px_alloc(klen + prefix_len);
 
