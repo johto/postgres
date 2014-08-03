@@ -230,24 +230,25 @@ write_signature_subpackets(PGP_Context *ctx, PX_MD *md, PushFilter *pkt)
 
 /* Hashes the signature with the v4 "final trailer" */
 static int
-digest_signature_final_trailer(PGP_Context *ctx, PX_MD *md)
+digest_v4_final_trailer(PX_MD *md, int trailer_len)
 {
-	uint8 sig_hashed_len;
-	uint8 data[6];
+	uint8 b;
 
 	/* two magic octets, per spec */
-	data[0] = 0x04;
-	data[1] = 0xFF;
+	b = 0x04;
+	px_md_update(md, &b, 1);
+	b = 0xFF;
+	px_md_update(md, &b, 1);
 
-	/* length of the hashed part from the signature (big endian) */
-	StaticAssertExpr((SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH) < 0xFF,
-					 "unexpected length of hashed data in signature's final trailer");
-	sig_hashed_len = SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH;
-	data[2] = 0x00;
-	data[3] = 0x00;
-	data[4] = 0x00;
-	data[5] = sig_hashed_len;
-	px_md_update(ctx->sig_digest_ctx, data, sizeof(data));
+	/* length of trailer, four octets in big endian */
+	b = (trailer_len >> 24);
+	px_md_update(md, &b, 1);
+	b = (trailer_len >> 16) & 0xFF;
+	px_md_update(md, &b, 1);
+	b = (trailer_len >> 8) & 0xFF;
+	px_md_update(md, &b, 1);
+	b = trailer_len & 0xFF;
+	px_md_update(md, &b, 1);
 
 	return 0;
 }
@@ -286,7 +287,8 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 	res = write_signature_subpackets(ctx, ctx->sig_digest_ctx, dst);
 	if (res < 0)
 		goto err;
-	res = digest_signature_final_trailer(ctx, ctx->sig_digest_ctx);
+	res = digest_v4_final_trailer(ctx->sig_digest_ctx,
+								  SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH);
 	if (res < 0)
 		goto err;
 
@@ -696,29 +698,6 @@ err:
 	return res;
 }
 
-static void
-digest_v4_final_trailer(PX_MD *md, PGP_Signature *sig)
-{
-	uint8 b;
-	int len;
-
-	/* two magic octets, per spec */
-	b = 0x04;
-	px_md_update(md, &b, 1);
-	b = 0xFF;
-	px_md_update(md, &b, 1);
-
-	/* length of trailer, four octets in big endian */
-	len = mbuf_size(sig->trailer);
-	b = (len >> 24);
-	px_md_update(md, &b, 1);
-	b = (len >> 16) & 0xFF;
-	px_md_update(md, &b, 1);
-	b = (len >> 8) & 0xFF;
-	px_md_update(md, &b, 1);
-	b = len & 0xFF;
-	px_md_update(md, &b, 1);
-}
 
 int
 pgp_verify_signature(PGP_Context *ctx)
@@ -743,7 +722,7 @@ pgp_verify_signature(PGP_Context *ctx)
 	len = mbuf_grab(sig->trailer, mbuf_avail(sig->trailer), &trailer);
 	px_md_update(md, trailer, len);
 	if (sig->version == 4)
-		digest_v4_final_trailer(md, sig);
+		digest_v4_final_trailer(md, len);
 	px_md_finish(md, digest);
 
 	elog(INFO, "%d %d, %d %d", sig->expected_digest[0], sig->expected_digest[1], digest[0], digest[1]);

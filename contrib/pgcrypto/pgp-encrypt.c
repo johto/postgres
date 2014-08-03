@@ -174,7 +174,7 @@ sig_writer_flush(PushFilter *dst, void *priv)
 	 * Capture all the data into an mbuf so we don't have to worry about the
 	 * length of the packet.
 	 */
-	buf = mbuf_create(4096);
+	buf = mbuf_create(0);
 	res = pushf_create_mbuf_writer(&pf, buf);
 	if (res < 0)
 		goto err;
