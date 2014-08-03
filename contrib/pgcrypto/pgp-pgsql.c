@@ -617,7 +617,7 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 
 	if (ctx->sig_key)
 	{
-		err = pgp_verify_signature(ctx, dst);
+		err = pgp_verify_signature(ctx);
 		if (err < 0)
 			goto out;
 	}

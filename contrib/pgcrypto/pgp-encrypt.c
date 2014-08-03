@@ -179,7 +179,7 @@ sig_writer_flush(PushFilter *dst, void *priv)
 	if (res < 0)
 		goto err;
 
-	res = pgp_write_pubenc_signature(ctx, pf);
+	res = pgp_write_signature(ctx, pf);
 	if (res < 0)
 		goto err;
 

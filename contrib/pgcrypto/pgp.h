@@ -330,9 +330,14 @@ int pgp_parse_pkt_hdr(PullFilter *src, uint8 *tag, int *len_p,
 int			pgp_skip_packet(PullFilter *pkt);
 int			pgp_expect_packet_end(PullFilter *pkt);
 
-int			pgp_write_pubenc_signature(PGP_Context *ctx, PushFilter *dst);
 int			pgp_write_pubenc_sesskey(PGP_Context *ctx, PushFilter *dst);
 int			pgp_create_pkt_writer(PushFilter *dst, int tag, PushFilter **res_p);
+
+int			pgp_write_signature(PGP_Context *ctx, PushFilter *dst);
+int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
+								PullFilter *pkt, int parseonly);
+int			pgp_verify_signature(PGP_Context *ctx);
+
 
 int			pgp_mpi_alloc(int bits, PGP_MPI **mpi);
 int			pgp_mpi_create(uint8 *data, int bits, PGP_MPI **mpi);
