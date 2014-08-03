@@ -321,6 +321,8 @@ int			pgp_key_alloc(PGP_PubKey **pk_p);
 void		pgp_key_free(PGP_PubKey *pk);
 int			_pgp_read_public_key(PullFilter *pkt, PGP_PubKey **pk_p);
 
+int			pgp_parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src);
+
 int			pgp_parse_pubenc_sesskey(PGP_Context *ctx, PullFilter *pkt);
 int pgp_create_pkt_reader(PullFilter **pf_p, PullFilter *src, int len,
 					  int pkttype, PGP_Context *ctx);
