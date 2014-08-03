@@ -363,6 +363,7 @@ process_secret_key(PullFilter *pkt, PGP_PubKey **pk_p,
 		if (key == NULL)
 			return PXE_PGP_NEED_SECRET_PSW;
 		GETBYTE(pkt, cipher_algo);
+		elog(INFO, "cipher algo is %d", cipher_algo);
 		res = pgp_s2k_read(pkt, &s2k);
 		if (res < 0)
 			return res;
@@ -455,15 +456,20 @@ process_secret_key(PullFilter *pkt, PGP_PubKey **pk_p,
 	return res;
 }
 
+/*
+ * XXX
+ */
 static int
 internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
-				  const uint8 *psw, int psw_len, int pubtype)
+				  const uint8 *psw, int psw_len, int pubtype,
+				  int encrypt)
 {
 	PullFilter *pkt = NULL;
 	int			res;
 	uint8		tag;
 	int			len;
 	PGP_PubKey *enc_key = NULL;
+	PGP_PubKey *sig_key = NULL;
 	PGP_PubKey *pk = NULL;
 	int			got_main_key = 0;
 
@@ -485,27 +491,54 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 		{
 			case PGP_PKT_PUBLIC_KEY:
 			case PGP_PKT_SECRET_KEY:
-				if (got_main_key)
+				if (encrypt)
 				{
-					res = PXE_PGP_MULTIPLE_KEYS;
-					break;
+					if (got_main_key)
+					{
+						res = PXE_PGP_MULTIPLE_KEYS;
+						break;
+					}
+					got_main_key = 1;
+					res = pgp_skip_packet(pkt);
 				}
-				got_main_key = 1;
-				res = pgp_skip_packet(pkt);
+				else if (tag == PGP_PKT_PUBLIC_KEY)
+				{
+					if (pubtype != 0)
+						res = PXE_PGP_EXPECT_SECRET_KEY;
+					else
+						res = _pgp_read_public_key(pkt, &pk);
+				}
+				else
+				{
+					if (pubtype != 1)
+						res = PXE_PGP_EXPECT_PUBLIC_KEY;
+					else
+						res = process_secret_key(pkt, &pk, psw, psw_len);
+				}
 				break;
 
 			case PGP_PKT_PUBLIC_SUBKEY:
-				if (pubtype != 0)
-					res = PXE_PGP_EXPECT_SECRET_KEY;
+				if (encrypt)
+				{
+					if (pubtype != 0)
+						res = PXE_PGP_EXPECT_SECRET_KEY;
+					else
+						res = _pgp_read_public_key(pkt, &pk);
+				}
 				else
-					res = _pgp_read_public_key(pkt, &pk);
+					res = pgp_skip_packet(pkt);
 				break;
 
 			case PGP_PKT_SECRET_SUBKEY:
-				if (pubtype != 1)
-					res = PXE_PGP_EXPECT_PUBLIC_KEY;
+				if (encrypt)
+				{
+					if (pubtype != 1)
+						res = PXE_PGP_EXPECT_PUBLIC_KEY;
+					else
+						res = process_secret_key(pkt, &pk, psw, psw_len);
+				}
 				else
-					res = process_secret_key(pkt, &pk, psw, psw_len);
+					res = pgp_skip_packet(pkt);
 				break;
 
 			case PGP_PKT_SIGNATURE:
@@ -525,7 +558,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 
 		if (pk != NULL)
 		{
-			if (res >= 0 && pk->can_encrypt)
+			if (res >= 0 && encrypt && pk->can_encrypt)
 			{
 				if (enc_key == NULL)
 				{
@@ -534,6 +567,16 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 				}
 				else
 					res = PXE_PGP_MULTIPLE_SUBKEYS;
+			}
+			else if (res >= 0 && !encrypt)
+			{
+				if (sig_key == NULL)
+				{
+					sig_key = pk;
+					pk = NULL;
+				}
+				else
+					res = PXE_PGP_MULTIPLE_KEYS;
 			}
 
 			if (pk)
@@ -552,19 +595,31 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 	{
 		if (enc_key)
 			pgp_key_free(enc_key);
+		if (sig_key)
+			pgp_key_free(sig_key);
 		return res;
 	}
 
-	if (!enc_key)
-		res = PXE_PGP_NO_USABLE_KEY;
+	if (encrypt)
+	{
+		if (!enc_key)
+			res = PXE_PGP_NO_USABLE_KEY;
+		else
+			*pk_p = enc_key;
+	}
 	else
-		*pk_p = enc_key;
+	{
+		if (!sig_key)
+			res = PXE_PGP_NO_USABLE_KEY;
+		else
+			*pk_p = sig_key;
+	}
 	return res;
 }
 
 static int
 set_key(MBuf *keypkt, const uint8 *key, int key_len,
-        int pubtype, PGP_PubKey **pk_p)
+        int pubtype, int encrypt, PGP_PubKey **pk_p)
 {
 	int			res;
 	PullFilter *src;
@@ -574,7 +629,7 @@ set_key(MBuf *keypkt, const uint8 *key, int key_len,
 	if (res < 0)
 		return res;
 
-	res = internal_read_key(src, &pk, key, key_len, pubtype);
+	res = internal_read_key(src, &pk, key, key_len, pubtype, encrypt);
 	pullf_free(src);
 
     if (res >= 0)
@@ -587,21 +642,25 @@ set_key(MBuf *keypkt, const uint8 *key, int key_len,
 
 int
 pgp_set_sigkey(PGP_Context *ctx, MBuf *keypkt,
-			   const uint8 *key, int key_len, int pubtype)
+			   const uint8 *key, int key_len, int pubtype,
+			   int encrypt)
 {
     int res;
 
-    res = set_key(keypkt, key, key_len, pubtype, &ctx->sig_key);
+    res = set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->sig_key);
     if (res < 0)
         return res;
-    if (ctx->sig_key->algo != PGP_PUB_RSA_ENCRYPT_SIGN)
+    if (ctx->sig_key->algo != PGP_PUB_RSA_ENCRYPT_SIGN &&
+		ctx->sig_key->algo != PGP_PUB_RSA_SIGN &&
+		ctx->sig_key->algo != PGP_PUB_DSA_SIGN)
         return PXE_PGP_UNSUPPORTED_PUBALGO;
     return 0;
 }
 
 int
 pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
-			   const uint8 *key, int key_len, int pubtype)
+			   const uint8 *key, int key_len, int pubtype,
+			   int encrypt)
 {
-    return set_key(keypkt, key, key_len, pubtype, &ctx->pub_key);
+    return set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->pub_key);
 }

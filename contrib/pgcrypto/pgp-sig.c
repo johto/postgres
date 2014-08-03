@@ -138,10 +138,37 @@ create_signature_vessel(PGP_Context *ctx, uint8 *data, int klen, PGP_MPI **msg_p
 }
 
 static int
+sign_and_write_dsa(PGP_Context *ctx, uint8 *digest, int digest_len, PGP_PubKey *pk, PushFilter *pkt)
+{
+	int			res;
+	PGP_MPI	   *m = NULL,
+			   *c = NULL;
+
+	/* create padded msg */
+	res = create_signature_vessel(ctx, digest, digest_len, &m, pk->pub.rsa.n->bytes - 1);
+	if (res < 0)
+		goto err;
+
+	/* sign it */
+	res = pgp_rsa_decrypt(pk, m, &c);
+	if (res < 0)
+		goto err;
+
+	/* write out */
+	res = pgp_mpi_write(pkt, c);
+
+err:
+	pgp_mpi_free(m);
+	pgp_mpi_free(c);
+	return res;
+}
+
+
+static int
 sign_and_write_rsa(PGP_Context *ctx, uint8 *digest, int digest_len, PGP_PubKey *pk, PushFilter *pkt)
 {
 	int			res;
-	PGP_MPI	*m = NULL,
+	PGP_MPI	   *m = NULL,
 			   *c = NULL;
 
 	/* create padded msg */
@@ -299,7 +326,18 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 	if (res < 0)
 		goto err;
 
-	res = sign_and_write_rsa(ctx, digest, digest_len, pk, dst);
+	switch (pk->algo)
+	{
+		case PGP_PUB_RSA_ENCRYPT_SIGN:
+		case PGP_PUB_RSA_SIGN:
+			res = sign_and_write_rsa(ctx, digest, digest_len, pk, dst);
+			break;
+		case PGP_PUB_DSA_SIGN:
+			res = sign_and_write_dsa(ctx, digest, digest_len, pk, dst);
+			break;
+		default:
+			res = PXE_PGP_UNKNOWN_PUBALGO;
+	}
 	if (res < 0)
 		goto err;
 

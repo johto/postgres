@@ -275,6 +275,7 @@ pgp_s2k_process(PGP_S2K *s2k, int cipher, const uint8 *key, int key_len)
 	if (s2k->key_len <= 0)
 		return PXE_PGP_UNSUPPORTED_CIPHER;
 
+
 	res = pgp_load_digest(s2k->digest_algo, &md);
 	if (res < 0)
 		return res;

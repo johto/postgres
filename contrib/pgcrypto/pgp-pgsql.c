@@ -38,6 +38,13 @@
 #include "px.h"
 #include "pgp.h"
 
+static void hndl(const char *msg)
+{
+	/* REMOVE ME */
+	elog(ERROR, "%s", msg);
+}
+
+
 /*
  * public functions
  */
@@ -442,6 +449,8 @@ encrypt_internal(int is_pubenc, int is_text,
 	struct debug_expect ex;
 	text	   *tmp_data = NULL;
 
+	px_set_debug_handler(hndl);
+
 	/*
 	 * Add data and key info RNG.
 	 */
@@ -474,7 +483,7 @@ encrypt_internal(int is_pubenc, int is_text,
 		MBuf	   *kbuf = create_mbuf_from_vardata(key);
 
 		err = pgp_set_pubkey(ctx, kbuf,
-							 NULL, 0, 0);
+							 NULL, 0, 0, 1);
 		mbuf_free(kbuf);
 		if (err < 0)
 			goto error;
@@ -489,12 +498,17 @@ encrypt_internal(int is_pubenc, int is_text,
 
 	if (sigkey)
 	{
+		uint8	   *psw = NULL;
+		int			psw_len = 0;
 		MBuf	   *kbuf;
 
 		if (keypsw)
-			elog(ERROR, "TODO");
+		{
+			psw = (uint8 *) VARDATA(keypsw);
+			psw_len = VARSIZE(keypsw) - VARHDRSZ;
+		}
 		kbuf = create_mbuf_from_vardata(sigkey);
-		err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 1);
+		err = pgp_set_sigkey(ctx, kbuf, psw, psw_len, 1, 0);
 		mbuf_free(kbuf);
 		if (err < 0)
 			goto error;
@@ -537,12 +551,6 @@ error:
 	px_set_debug_handler(NULL);
 
 	return res;
-}
-
-static void hndl(const char *msg)
-{
-	/* REMOVE ME */
-	elog(ERROR, "%s", msg);
 }
 
 static bytea *
@@ -589,7 +597,7 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 			psw_len = VARSIZE(keypsw) - VARHDRSZ;
 		}
 		kbuf = create_mbuf_from_vardata(key);
-		err = pgp_set_pubkey(ctx, kbuf, psw, psw_len, 1);
+		err = pgp_set_pubkey(ctx, kbuf, psw, psw_len, 1, 1);
 		mbuf_free(kbuf);
 
 		if (err < 0)
@@ -598,7 +606,7 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 		if (sigkey)
 		{
 			kbuf = create_mbuf_from_vardata(sigkey);
-			err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0);
+			err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0, 0);
 			mbuf_free(kbuf);
 			if (err < 0)
 				goto out;
@@ -692,7 +700,7 @@ signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw)
 	{
 		MBuf *kbuf = create_mbuf_from_vardata(key);
 
-		err = pgp_set_pubkey(ctx, kbuf, NULL, 0, 1);
+		err = pgp_set_pubkey(ctx, kbuf, NULL, 0, 1, 1);
 		mbuf_free(kbuf);
 		if (err < 0)
 			goto out;

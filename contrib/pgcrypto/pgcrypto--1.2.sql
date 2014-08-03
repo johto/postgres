@@ -95,14 +95,14 @@ AS 'MODULE_PATHNAME', 'pgp_sym_encrypt_bytea'
 LANGUAGE C STRICT;
 
 --
--- pgp_sym_encrypt_sign(data, key, sigkey, args)
+-- pgp_sym_encrypt_sign(data, key, sigkey, psw, args)
 --
-CREATE FUNCTION pgp_sym_encrypt_sign(text, text, bytea, text)
+CREATE FUNCTION pgp_sym_encrypt_sign(text, text, bytea, text, text)
 RETURNS bytea
 AS 'MODULE_PATHNAME', 'pgp_sym_encrypt_sign_bytea' /* TODO */
 LANGUAGE C STRICT;
 
-CREATE FUNCTION pgp_sym_encrypt_sign_bytea(bytea, text, bytea, text)
+CREATE FUNCTION pgp_sym_encrypt_sign_bytea(bytea, text, bytea, text, text)
 RETURNS bytea
 AS 'MODULE_PATHNAME', 'pgp_sym_encrypt_sign_bytea'
 LANGUAGE C STRICT;
@@ -157,6 +157,19 @@ LANGUAGE C STRICT;
 CREATE FUNCTION pgp_pub_encrypt_bytea(bytea, bytea, text)
 RETURNS bytea
 AS 'MODULE_PATHNAME', 'pgp_pub_encrypt_bytea'
+LANGUAGE C STRICT;
+
+--
+-- pgp_pub_encrypt_sign(data, key, sigkey, psw, args)
+--
+CREATE FUNCTION pgp_pub_encrypt_sign(text, bytea, bytea, text, text)
+RETURNS bytea
+AS 'MODULE_PATHNAME', 'pgp_pub_encrypt_sign_bytea' /* TODO */
+LANGUAGE C STRICT;
+
+CREATE FUNCTION pgp_pub_encrypt_sign_bytea(bytea, bytea, bytea, text, text)
+RETURNS bytea
+AS 'MODULE_PATHNAME', 'pgp_pub_encrypt_sign_bytea'
 LANGUAGE C STRICT;
 
 --

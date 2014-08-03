@@ -285,9 +285,11 @@ int			pgp_get_unicode_mode(PGP_Context *ctx);
 
 int			pgp_set_symkey(PGP_Context *ctx, const uint8 *key, int klen);
 int			pgp_set_sigkey(PGP_Context *ctx, MBuf *keypkt,
-						   const uint8 *key, int klen, int pubtype);
+						   const uint8 *key, int klen, int pubtype,
+						   int encrypt);
 int			pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
-						   const uint8 *key, int klen, int pubtype);
+						   const uint8 *key, int klen, int pubtype,
+						   int encrypt);
 
 int			pgp_get_keyid(MBuf *pgp_data, char *dst);
 
