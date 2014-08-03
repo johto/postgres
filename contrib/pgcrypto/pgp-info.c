@@ -184,16 +184,6 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
 	if (res < 0)
 		goto out;
 
-	/* I don't need this, do I? */
-#if 0
-	if (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC)
-	{
-		res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
-		if (res < 0)
-			goto out;
-	}
-#endif
-
 	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;

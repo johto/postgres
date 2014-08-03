@@ -476,7 +476,7 @@ mdc_read(void *priv, PullFilter *src, int len,
 	return res;
 }
 
-struct PullFilterOps pgp_mdc_filter = {
+static struct PullFilterOps mdc_filter = {
 	mdc_init, mdc_read, mdc_free
 };
 
@@ -1445,7 +1445,7 @@ parse_symenc_mdc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
+	res = pullf_create(&pf_mdc, &mdc_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;
 
