@@ -31,6 +31,8 @@
 #include "postgres.h"
 #include "c.h"
 
+#include <time.h>
+
 #include "px.h"
 #include "pgp.h"
 
