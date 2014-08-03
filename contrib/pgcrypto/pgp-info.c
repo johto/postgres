@@ -105,8 +105,8 @@ print_key(uint8 *keyid, char *dst)
 typedef int (*sig_key_cb_type)(void *opaque, PGP_Signature *sig);
 
 static int
-_extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
-						sig_key_cb_type sig_key_cb)
+extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
+					   sig_key_cb_type sig_key_cb)
 {
 	int res;
 	PGP_Signature *sig = NULL;
@@ -130,8 +130,15 @@ _extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 				if (res >= 0)
 					res = sig_key_cb(opaque, sig);
 				break;
-			default:
+			case PGP_PKT_ONEPASS_SIGNATURE:
+			case PGP_PKT_LITERAL_DATA:
+			case PGP_PKT_COMPRESSED_DATA:
+			case PGP_PKT_MDC:
 				res = pgp_skip_packet(pkt);
+				break;
+			default:
+				elog(WARNING, "broken tag %d", tag);
+				res = PXE_PGP_CORRUPT_DATA;
 		}
 
 		if (pkt)
@@ -149,9 +156,13 @@ _extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 }
 
 
+/*
+ * Set up everything needed to decrypt the data and to extract out all the
+ * signatures.
+ */
 static int
-extract_signature_keys(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
-					   sig_key_cb_type sig_key_cb)
+read_signature_keys_from_data(PGP_Context *ctx, PullFilter *pkt, int tag,
+							  void *opaque, sig_key_cb_type sig_key_cb)
 {
 	int res;
 	PGP_CFB *cfb = NULL;
@@ -188,7 +199,7 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
 	if (res < 0)
 		goto out;
 
-	res = _extract_signature_keys(ctx, pf_prefix, opaque, sig_key_cb);
+	res = extract_signature_keys(ctx, pf_prefix, opaque, sig_key_cb);
 
 out:
 	if (pf_prefix)
@@ -219,6 +230,7 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 	int			got_data = 0;
 	uint8		keyid_buf[8];
 	int			got_main_key = 0;
+	PGP_Signature *sig = NULL;
 
 
 	res = pullf_create_mbuf_reader(&src, pgp_data);
@@ -265,13 +277,27 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 			case PGP_PKT_SYMENCRYPTED_DATA:
 			case PGP_PKT_SYMENCRYPTED_DATA_MDC:
 				got_data = 1;
+
+				/*
+				 * If there's a key callback, read all the keys from the
+				 * encrypted data.  Otherwise we're done.
+				 */
 				if (sig_key_cb)
-					res = extract_signature_keys(ctx, pkt, tag, opaque, sig_key_cb);
+					res = read_signature_keys_from_data(ctx, pkt, tag, opaque, sig_key_cb);
+				break;
+			case PGP_PKT_SIGNATURE:
+				if (sig_key_cb)
+				{
+					res = pgp_parse_signature(ctx, &sig, pkt, 1);
+					if (res >= 0)
+						res = sig_key_cb(opaque, sig);
+				}
+				else
+					res = pgp_skip_packet(pkt);
 				break;
 			case PGP_PKT_SYMENCRYPTED_SESSKEY:
 				got_symenc_key++;
 				/* fallthru */
-			case PGP_PKT_SIGNATURE:
 			case PGP_PKT_MARKER:
 			case PGP_PKT_TRUST:
 			case PGP_PKT_USER_ID:
@@ -286,6 +312,9 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 		if (pkt)
 			pullf_free(pkt);
 		pkt = NULL;
+		if (sig)
+			pgp_sig_free(sig);
+		sig = NULL;
 
 		if (res < 0 || got_data)
 			break;
