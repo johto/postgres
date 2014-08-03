@@ -167,7 +167,7 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
 		GETBYTE(pkt, ver);
 		if (ver != 1)
 		{
-			px_debug("parse_symenc_mdc_data: pkt ver != 1");
+			px_debug("extract_signature_keys: pkt ver != 1");
 			return PXE_PGP_CORRUPT_DATA;
 		}
 		resync = 0;
