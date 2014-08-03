@@ -45,7 +45,7 @@ enum PGP_PKT_TYPE
 	PGP_PKT_PUBENCRYPTED_SESSKEY = 1,
 	PGP_PKT_SIGNATURE = 2,
 	PGP_PKT_SYMENCRYPTED_SESSKEY = 3,
-    PGP_PKT_ONEPASS_SIGNATURE = 4,
+	PGP_PKT_ONEPASS_SIGNATURE = 4,
 	PGP_PKT_SECRET_KEY = 5,
 	PGP_PKT_PUBLIC_KEY = 6,
 	PGP_PKT_SECRET_SUBKEY = 7,
@@ -110,15 +110,15 @@ enum PGP_DIGEST_TYPE
 
 enum PGP_SIG_SUBPKT_TYPE
 {
-    PGP_SIGNATURE_CREATION_TIME = 2,
-    PGP_ISSUER_ID = 16
+	PGP_SIGNATURE_CREATION_TIME = 2,
+	PGP_ISSUER_ID = 16
 };
 
 #define PGP_MAX_KEY                 (256/8)
 #define PGP_MAX_BLOCK               (256/8)
 #define PGP_MAX_DIGEST              (512/8)
 #define PGP_MAX_DIGEST_ASN1_PREFIX  20
-#define PGP_S2K_SALT   8
+#define PGP_S2K_SALT				8
 
 typedef struct PGP_MPI PGP_MPI;
 typedef struct PGP_PubKey PGP_PubKey;
@@ -148,7 +148,7 @@ struct PGP_Context
 	int			s2k_digest_algo;
 	int			s2k_cipher_algo;
 	int			cipher_algo;
-    int         digest_algo;
+	int			digest_algo;
 	int			compress_algo;
 	int			compress_level;
 	int			disable_mdc;
@@ -166,12 +166,12 @@ struct PGP_Context
 	int			use_mdcbuf_filter;
 	PX_MD	   *mdc_ctx;
 
-    PX_MD      *sig_digest_ctx;
-    int         sig_onepass;
+	PX_MD	   *sig_digest_ctx;
+	int			sig_onepass;
 	PGP_Signature *sig_expected;
 
 	PGP_PubKey *pub_key;		/* owned by ctx */
-    PGP_PubKey *sig_key;        /* owned by ctx */
+	PGP_PubKey *sig_key;		/* owned by ctx */
 	const uint8 *sym_key;		/* not owned by ctx */
 	int			sym_key_len;
 
@@ -246,7 +246,7 @@ struct PGP_Signature
 {
 	uint8 creation_time[4];
 	uint8 keyid[8];
-    uint8 expected_digest[PGP_MAX_DIGEST];
+	uint8 expected_digest[PGP_MAX_DIGEST];
 	uint8 expected_digest_l16[2];
 	uint8 version;
 	uint8 algo;
@@ -267,10 +267,10 @@ int			pgp_get_digest_code(const char *name);
 int			pgp_get_cipher_code(const char *name);
 const char *pgp_get_digest_name(int code);
 const char *pgp_get_cipher_name(int code);
-int         pgp_get_digest_asn1_prefix(int code, uint8 *data);
+int			pgp_get_digest_asn1_prefix(int code, uint8 *data);
 
 int			pgp_set_cipher_algo(PGP_Context *ctx, const char *name);
-int         pgp_set_digest_algo(PGP_Context *ctx, const char *name);
+int			pgp_set_digest_algo(PGP_Context *ctx, const char *name);
 int			pgp_set_s2k_mode(PGP_Context *ctx, int type);
 int			pgp_set_s2k_cipher_algo(PGP_Context *ctx, const char *name);
 int			pgp_set_s2k_digest_algo(PGP_Context *ctx, const char *name);
