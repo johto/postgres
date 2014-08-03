@@ -229,7 +229,7 @@ write_signature_subpackets(PGP_Context *ctx, PX_MD *md, PushFilter *pkt)
 }
 
 /* Hashes the signature with the v4 "final trailer" */
-static int
+static void
 digest_v4_final_trailer(PX_MD *md, int trailer_len)
 {
 	uint8 b;
@@ -249,8 +249,6 @@ digest_v4_final_trailer(PX_MD *md, int trailer_len)
 	px_md_update(md, &b, 1);
 	b = trailer_len & 0xFF;
 	px_md_update(md, &b, 1);
-
-	return 0;
 }
 
 int
@@ -287,10 +285,9 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 	res = write_signature_subpackets(ctx, ctx->sig_digest_ctx, dst);
 	if (res < 0)
 		goto err;
-	res = digest_v4_final_trailer(ctx->sig_digest_ctx,
-								  SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH);
-	if (res < 0)
-		goto err;
+
+	digest_v4_final_trailer(ctx->sig_digest_ctx,
+							SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH);
 
 	px_md_finish(ctx->sig_digest_ctx, digest);
 	digest_len = px_md_result_size(ctx->sig_digest_ctx);
@@ -702,7 +699,6 @@ err:
 int
 pgp_verify_signature(PGP_Context *ctx)
 {
-	int			res;
 	int len;
 	uint8 *trailer;
 	uint8 digest[PGP_MAX_DIGEST];

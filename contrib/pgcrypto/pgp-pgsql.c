@@ -1022,7 +1022,6 @@ pgp_signature_keys_w(PG_FUNCTION_ARGS)
 	bytea	   *data,
 			   *key;
 	text	   *res;
-	int			res_len;
 	MBuf	   *buf;
 	PGP_Context *ctx;
 	struct debug_expect ex;
