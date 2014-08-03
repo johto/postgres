@@ -275,7 +275,6 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 				else
 					res = pgp_skip_packet(pkt);
 				break;
-
 			case PGP_PKT_PUBENCRYPTED_SESSKEY:
 				got_pubenc_key++;
 				if (sig_key_cb)
