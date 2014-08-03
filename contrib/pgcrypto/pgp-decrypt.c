@@ -923,6 +923,9 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 	PGP_Signature *sig;
 	int res;
 
+	if (!ctx->sig_key)
+		return pgp_skip_packet(pkt);
+
 	res = pgp_parse_signature(ctx, &sig, pkt, 0);
 	if (res < 0)
 		return res;
@@ -984,7 +987,7 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 		switch (tag)
 		{
 			case PGP_PKT_LITERAL_DATA:
-				if (!ctx->sig_onepass)
+				if (ctx->sig_key && !ctx->sig_onepass)
 				{
 					px_debug("no usable one-pass signatures found");
 					res = PXE_PGP_NO_USABLE_SIGNATURE;

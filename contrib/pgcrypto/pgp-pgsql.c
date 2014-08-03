@@ -43,6 +43,8 @@
  */
 PG_FUNCTION_INFO_V1(pgp_sym_encrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_sym_encrypt_text);
+PG_FUNCTION_INFO_V1(pgp_sym_encrypt_sign_bytea);
+//PG_FUNCTION_INFO_V1(pgp_sym_encrypt_sign_text);
 PG_FUNCTION_INFO_V1(pgp_sym_decrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_sym_decrypt_text);
 
@@ -476,22 +478,24 @@ encrypt_internal(int is_pubenc, int is_text,
 		mbuf_free(kbuf);
 		if (err < 0)
 			goto error;
-
-		if (sigkey)
-		{
-			if (keypsw)
-				elog(ERROR, "TODO");
-			kbuf = create_mbuf_from_vardata(sigkey);
-			err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 1);
-			mbuf_free(kbuf);
-			if (err < 0)
-				goto error;
-		}
 	}
 	else
 	{
 		err = pgp_set_symkey(ctx, (uint8 *) VARDATA(key),
 							 VARSIZE(key) - VARHDRSZ);
+		if (err < 0)
+			goto error;
+	}
+
+	if (sigkey)
+	{
+		MBuf	   *kbuf;
+
+		if (keypsw)
+			elog(ERROR, "TODO");
+		kbuf = create_mbuf_from_vardata(sigkey);
+		err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 1);
+		mbuf_free(kbuf);
 		if (err < 0)
 			goto error;
 	}
@@ -680,6 +684,8 @@ signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw)
 	int				err;
 	struct debug_expect ex;
 
+	px_set_debug_handler(hndl);
+
 	init_work(&ctx, 0, NULL, &ex);
 
 	if (is_pubenc)
@@ -761,6 +767,31 @@ pgp_sym_encrypt_text(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(key, 1);
 	if (PG_NARGS() > 2)
 		PG_FREE_IF_COPY(arg, 2);
+	PG_RETURN_TEXT_P(res);
+}
+
+Datum
+pgp_sym_encrypt_sign_bytea(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key,
+			   *sigkey;
+	text	   *arg = NULL;
+	text	   *res;
+
+	data = PG_GETARG_BYTEA_P(0);
+	key = PG_GETARG_BYTEA_P(1);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		arg = PG_GETARG_BYTEA_P(3);
+
+	res = encrypt_internal(0, 0, data, key, sigkey, NULL, arg);
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(arg, 3);
 	PG_RETURN_TEXT_P(res);
 }
 

@@ -134,6 +134,7 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 			case PGP_PKT_LITERAL_DATA:
 			case PGP_PKT_COMPRESSED_DATA:
 			case PGP_PKT_MDC:
+			case PGP_PKT_TRUST:
 				res = pgp_skip_packet(pkt);
 				break;
 			default:
@@ -267,6 +268,14 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 				if (res > 0)
 					got_pub_key++;
 				break;
+			case PGP_PKT_SYMENCRYPTED_SESSKEY:
+				got_symenc_key++;
+				if (sig_key_cb)
+					res = pgp_parse_symenc_sesskey(ctx, pkt);
+				else
+					res = pgp_skip_packet(pkt);
+				break;
+
 			case PGP_PKT_PUBENCRYPTED_SESSKEY:
 				got_pubenc_key++;
 				if (sig_key_cb)
@@ -294,9 +303,6 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 				else
 					res = pgp_skip_packet(pkt);
 				break;
-			case PGP_PKT_SYMENCRYPTED_SESSKEY:
-				got_symenc_key++;
-				/* fallthru */
 			case PGP_PKT_MARKER:
 			case PGP_PKT_TRUST:
 			case PGP_PKT_USER_ID:
