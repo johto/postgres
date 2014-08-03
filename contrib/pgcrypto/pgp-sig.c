@@ -386,7 +386,7 @@ start_section(struct SigSubPktParserState *pstate, bool hashed)
 
 	/* hashed section MUST be present */
 	if (hashed && len == 0)
-		return -6000; /* TODO */
+		return PXE_PGP_CORRUPT_DATA;
 	pstate->lr_len = len;
 	res = pullf_create_limited_reader(&pstate->lr, src, &pstate->lr_len);
 	if (res < 0)
@@ -568,11 +568,15 @@ parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 		{
 			/* unknown subpacket; skip over the data */
 			res = pullf_discard(subpkt.body, subpkt.len);
-			if (res == PXE_MBUF_SHORT_READ)
-				res = PXE_PGP_CORRUPT_DATA; /* XXX should we bother? */
 			if (res < 0)
 				goto err;
 		}
+	}
+
+	if (!found_creation_time)
+	{
+		res = PXE_PGP_CORRUPT_DATA;
+		goto err;
 	}
 
 	res = pullf_read_fixed(pkt, 2, sig->expected_digest_l16);
