@@ -276,12 +276,11 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 				break;
 			case PGP_PKT_SYMENCRYPTED_DATA:
 			case PGP_PKT_SYMENCRYPTED_DATA_MDC:
-				got_data = 1;
-
 				/*
 				 * If there's a key callback, read all the keys from the
 				 * encrypted data.  Otherwise we're done.
 				 */
+				got_data = 1;
 				if (sig_key_cb)
 					res = read_signature_keys_from_data(ctx, pkt, tag, opaque, sig_key_cb);
 				break;
