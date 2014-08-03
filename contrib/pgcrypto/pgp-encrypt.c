@@ -148,19 +148,6 @@ static const PushFilterOps mdc_filter = {
  */
 
 static int
-sig_writer_init(PushFilter *dst, void *init_arg, void **priv_p)
-{
-	*priv_p = init_arg;
-	return 0;
-}
-
-static int
-sig_writer_write(PushFilter *dst, void *priv, const uint8 *data, int len)
-{
-	return pushf_write(dst, data, len);
-}
-
-static int
 sig_writer_flush(PushFilter *dst, void *priv)
 {
 	PGP_Context *ctx = priv;
@@ -199,7 +186,7 @@ err:
 }
 
 static const PushFilterOps sig_writer_filter = {
-	sig_writer_init, sig_writer_write, sig_writer_flush, NULL
+	NULL, NULL, sig_writer_flush, NULL
 };
 
 
