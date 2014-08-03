@@ -124,6 +124,7 @@ typedef struct PGP_MPI PGP_MPI;
 typedef struct PGP_PubKey PGP_PubKey;
 typedef struct PGP_Context PGP_Context;
 typedef struct PGP_S2K PGP_S2K;
+typedef struct PGP_Signature PGP_Signature;
 
 struct PGP_S2K
 {
@@ -166,12 +167,8 @@ struct PGP_Context
 	PX_MD	   *mdc_ctx;
 
     PX_MD      *sig_digest_ctx;
-    int         sig_version;
     int         sig_onepass;
-    MBuf       *sig_digest_trailer;
-    uint8       sig_expected_digest[PGP_MAX_DIGEST];
-    MBuf       *sig_expected_mpi;
-    uint8       sig_expected_left16[2];
+	PGP_Signature *sig_expected;
 
 	PGP_PubKey *pub_key;		/* owned by ctx */
     PGP_PubKey *sig_key;        /* owned by ctx */
@@ -245,10 +242,26 @@ struct PGP_PubKey
 	int			can_encrypt;
 };
 
+struct PGP_Signature
+{
+	uint8 creation_time[4];
+	uint8 keyid[8];
+    uint8 expected_digest[PGP_MAX_DIGEST];
+	uint8 expected_digest_l16[2];
+	uint8 version;
+	uint8 algo;
+	uint8 digest_algo;
+	uint8 type;
+	MBuf *trailer;
+};
+
 int			pgp_init(PGP_Context **ctx);
 int			pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst);
 int			pgp_decrypt(PGP_Context *ctx, MBuf *src, MBuf *dst);
 int			pgp_free(PGP_Context *ctx);
+
+int			pgp_sig_create(PGP_Signature **sig_p);
+int			pgp_sig_free(PGP_Signature *sig);
 
 int			pgp_get_digest_code(const char *name);
 int			pgp_get_cipher_code(const char *name);
@@ -337,3 +350,5 @@ int			pgp_rsa_encrypt(PGP_PubKey *pk, PGP_MPI *m, PGP_MPI **c);
 int			pgp_rsa_decrypt(PGP_PubKey *pk, PGP_MPI *c, PGP_MPI **m);
 
 extern struct PullFilterOps pgp_decrypt_filter;
+extern struct PullFilterOps pgp_mdc_filter;
+extern struct PullFilterOps pgp_prefix_filter;

@@ -102,14 +102,121 @@ print_key(uint8 *keyid, char *dst)
 	return 8 * 2;
 }
 
-static const uint8 any_key[] =
-{0, 0, 0, 0, 0, 0, 0, 0};
+typedef int (*sig_key_cb_type)(void *opaque, PGP_Signature *sig);
 
-/*
- * dst should have room for 17 bytes
- */
-int
-pgp_get_keyid(MBuf *pgp_data, char *dst)
+static int
+_extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
+						sig_key_cb_type sig_key_cb)
+{
+	int res;
+	PGP_Signature *sig = NULL;
+	PullFilter *pkt = NULL;
+	int len;
+	uint8 tag;
+
+	while (1)
+	{
+		res = pgp_parse_pkt_hdr(src, &tag, &len, 0);
+		if (res <= 0)
+			break;
+		res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
+		if (res < 0)
+			break;
+
+		switch (tag)
+		{
+			case PGP_PKT_SIGNATURE:
+				res = pgp_parse_signature(ctx, &sig, pkt, 1);
+				if (res >= 0)
+					res = sig_key_cb(opaque, sig);
+				break;
+			default:
+				res = pgp_skip_packet(pkt);
+		}
+
+		if (pkt)
+			pullf_free(pkt);
+		pkt = NULL;
+		if (sig)
+			pgp_sig_free(sig);
+		sig = NULL;
+
+		if (res < 0)
+			break;
+	}
+
+	return res;
+}
+
+
+static int
+extract_signature_keys(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
+					   sig_key_cb_type sig_key_cb)
+{
+	int res;
+	PGP_CFB *cfb = NULL;
+	PullFilter *pf_decrypt = NULL;
+	PullFilter *pf_prefix = NULL;
+	PullFilter *pf_mdc = NULL;
+	int resync;
+
+	if (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC)
+	{
+		uint8 ver;
+
+		GETBYTE(pkt, ver);
+		if (ver != 1)
+		{
+			px_debug("parse_symenc_mdc_data: pkt ver != 1");
+			return PXE_PGP_CORRUPT_DATA;
+		}
+		resync = 0;
+	}
+	else
+		resync = 1;
+
+	res = pgp_cfb_create(&cfb, ctx->cipher_algo,
+						 ctx->sess_key, ctx->sess_key_len, resync, NULL);
+	if (res < 0)
+		goto out;
+
+	res = pullf_create(&pf_decrypt, &pgp_decrypt_filter, cfb, pkt);
+	if (res < 0)
+		goto out;
+
+	/* I don't need this, do I? */
+#if 0
+	if (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC)
+	{
+		res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
+		if (res < 0)
+			goto out;
+	}
+#endif
+
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
+	if (res < 0)
+		goto out;
+
+	res = _extract_signature_keys(ctx, pf_prefix, opaque, sig_key_cb);
+
+out:
+	if (pf_prefix)
+		pullf_free(pf_prefix);
+	if (pf_mdc)
+		pullf_free(pf_mdc);
+	if (pf_decrypt)
+		pullf_free(pf_decrypt);
+	if (cfb)
+		pgp_cfb_free(cfb);
+
+	return res;
+}
+
+static int
+get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+					int (*key_cb)(void *opaque, uint8 keyid[8]),
+					sig_key_cb_type sig_key_cb)
 {
 	int			res;
 	PullFilter *src;
@@ -160,12 +267,16 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 				break;
 			case PGP_PKT_PUBENCRYPTED_SESSKEY:
 				got_pubenc_key++;
-				res = read_pubenc_keyid(pkt, keyid_buf);
+				if (sig_key_cb)
+					res = pgp_parse_pubenc_sesskey(ctx, pkt);
+				else
+					res = read_pubenc_keyid(pkt, keyid_buf);
 				break;
 			case PGP_PKT_SYMENCRYPTED_DATA:
 			case PGP_PKT_SYMENCRYPTED_DATA_MDC:
-				/* don't skip it, just stop */
 				got_data = 1;
+				if (sig_key_cb)
+					res = extract_signature_keys(ctx, pkt, tag, opaque, sig_key_cb);
 				break;
 			case PGP_PKT_SYMENCRYPTED_SESSKEY:
 				got_symenc_key++;
@@ -210,26 +321,63 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 	/*
 	 * if still ok, look what we got
 	 */
-	if (res >= 0)
+	if (res < 0)
+		return res;
+
+	if (key_cb)
 	{
 		if (got_pubenc_key || got_pub_key)
-		{
-			if (memcmp(keyid_buf, any_key, 8) == 0)
-			{
-				memcpy(dst, "ANYKEY", 7);
-				res = 6;
-			}
-			else
-				res = print_key(keyid_buf, dst);
-		}
+			res = key_cb(opaque, keyid_buf);
 		else if (got_symenc_key)
-		{
-			memcpy(dst, "SYMKEY", 7);
-			res = 6;
-		}
+			res = key_cb(opaque, NULL);
 		else
 			res = PXE_PGP_NO_USABLE_KEY;
 	}
 
 	return res;
+}
+
+static const uint8 any_key[] =
+{0, 0, 0, 0, 0, 0, 0, 0};
+
+static int
+get_keyid_cb(void *ctx, uint8 keyid[8])
+{
+	char *dst = (char *) ctx;
+	if (keyid == NULL)
+	{
+		memcpy(dst, "SYMKEY", 7);
+		return 6;
+	}
+	else if (memcmp(keyid, any_key, 8) == 0)
+	{
+		memcpy(dst, "ANYKEY", 7);
+		return 6;
+	}
+	else
+		return print_key(keyid, dst);
+}
+
+static int
+get_signature_key_cb(void *ctx, PGP_Signature *sig)
+{
+	char dst[17];
+	print_key(sig->keyid, dst);
+	elog(INFO, "keyid %s", dst);
+	return 0;
+}
+
+/*
+ * dst should have room for 17 bytes
+ */
+int
+pgp_get_keyid(MBuf *pgp_data, char *dst)
+{
+	return get_key_information(NULL, pgp_data, dst, get_keyid_cb, NULL);
+}
+
+int
+pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data)
+{
+	return get_key_information(ctx, pgp_data, NULL /* TODO */, NULL, get_signature_key_cb);
 }

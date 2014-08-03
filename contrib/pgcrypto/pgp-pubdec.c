@@ -199,7 +199,7 @@ decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 }
 
 int
-pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
+pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
 	int res;
 	PGP_PubKey *pk = ctx->sig_key;
@@ -240,7 +240,7 @@ pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
 	}
 	msglen = m->bytes - (msg - m->data);
 
-	prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
+	prefix_len = pgp_get_digest_asn1_prefix(sig->digest_algo, asn1_prefix);
 	/* should have been checked already */
 	if (prefix_len < 0)
 	{
@@ -260,7 +260,7 @@ pgp_parse_pubenc_signature(PGP_Context *ctx, PullFilter *pkt)
 		goto out;
 	}
 	/* TODO: check lenght of haxh? */
-	memcpy(ctx->sig_expected_digest, msg + prefix_len, msglen);
+	memcpy(sig->expected_digest, msg + prefix_len, msglen);
 
 out:
 	pgp_mpi_free(m);

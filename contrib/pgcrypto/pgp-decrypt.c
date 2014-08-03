@@ -327,7 +327,7 @@ prefix_init(void **priv_p, void *arg, PullFilter *src)
 	return 0;
 }
 
-static struct PullFilterOps prefix_filter = {
+struct PullFilterOps pgp_prefix_filter = {
 	prefix_init, NULL, NULL
 };
 
@@ -476,7 +476,7 @@ mdc_read(void *priv, PullFilter *src, int len,
 	return res;
 }
 
-static struct PullFilterOps mdc_filter = {
+struct PullFilterOps pgp_mdc_filter = {
 	mdc_init, mdc_read, mdc_free
 };
 
@@ -681,8 +681,8 @@ decrypt_key(PGP_Context *ctx, const uint8 *src, int len)
 /*
  * Handle key packet
  */
-static int
-parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src)
+int
+pgp_parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src)
 {
 	uint8	   *p;
 	int			res;
@@ -921,13 +921,13 @@ parse_compressed_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 static int
 parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 {
-	int		 version;
-	int		 type;
-	int		 digestalgo;
-	int		 pubkeyalgo;
-	int		 last;
-	int			res;
-	uint8		keyid[8];
+	int		version;
+	int		type;
+	int		digestalgo;
+	int		pubkeyalgo;
+	int		last;
+	int		res;
+	uint8	keyid[8];
 
 	GETBYTE(pkt, version);
 	GETBYTE(pkt, type);
@@ -942,6 +942,8 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 		return 0;
 
 	/* is this the key we want? */
+	/* TODO */
+#if 0
 	if (memcmp(keyid, ctx->sig_key->key_id, 8) == 0 &&
 		pubkeyalgo == ctx->sig_key->algo)
 	{
@@ -952,6 +954,7 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 		if (res < 0)
 			return res;
 	}
+#endif
 
 	return 0;
 }
@@ -1092,24 +1095,14 @@ err:
 	return 1;
 }
 
-struct SignatureData {
-	uint8 creation_time[4];
-	uint8 keyid[8];
-	uint8 expected_left16[2];
-	uint8 algo;
-	uint8 digest_algo;
-	uint8 type;
-	MBuf *trailer;
-};
-
 static int
-parse_v3_signature_header(PGP_Context *ctx, PullFilter *pkt, struct SignatureData *sig)
+parse_v3_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
 	elog(ERROR, "TODO");
 }
 
 static int
-parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, struct SignatureData *sig)
+parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
 	int res;
 	uint8 version;
@@ -1188,7 +1181,7 @@ parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, struct SignatureDat
 		}
 	}
 
-	res = pullf_read_fixed(pkt, 2, sig->expected_left16);
+	res = pullf_read_fixed(pkt, 2, sig->expected_digest_l16);
 
 err:
 	destroy_sigsubpkt_parser(&pstate);
@@ -1200,42 +1193,71 @@ err:
 	return 0;
 }
 
-static int
-parse_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
+int
+pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, int parseonly)
 {
-	int		 version;
-	int			res;
-	struct SignatureData sig;
-	bool		want;
+	int		version;
+	int		res;
+	PGP_Signature *sig;
 
 	GETBYTE(pkt, version);
 
-	memset(&sig, 0, sizeof(sig));
-	sig.trailer = mbuf_create(0);
+	res = pgp_sig_create(&sig);
+	if (res < 0)
+		goto err;
+	sig->version = version;
 	if (version == 3)
-		res = parse_v3_signature_header(ctx, pkt, &sig);
+		res = parse_v3_signature_header(ctx, pkt, sig);
 	else if (version == 4)
-		res = parse_v4_signature_header(ctx, pkt, &sig);
+		res = parse_v4_signature_header(ctx, pkt, sig);
+	else
+		res = PXE_PGP_CORRUPT_DATA;
 
-	want = (memcmp(sig.keyid, ctx->sig_key->key_id, 8) == 0) &&
-			sig.algo == ctx->sig_key->algo;
-	px_memset(sig.keyid, 0, 8);
-	if (res < 0 || !want)
-		goto discard;
+	if (res < 0)
+		goto err;
 
-	/* this is the signature we're looking for */
-	/* TODO: move ton of code to pgp-pubdec.c */
-	ctx->sig_version = version;
-	ctx->sig_digest_trailer = sig.trailer;
+	/* TODO: move ton of code to pgp-pubdec.c OR NOT */
+	if (parseonly)
+		res = pullf_discard(pkt, -1);
+	else
+		res = pgp_parse_pubenc_signature(ctx, pkt, sig);
 
-	return pgp_parse_pubenc_signature(ctx, pkt);
+err:
+	if (res < 0)
+		pgp_sig_free(sig);
+	else
+		*sig_p = sig;
+	return res;
+}
 
-discard:
-	mbuf_free(sig.trailer);
+static int
+parse_signature(PGP_Context *ctx, PullFilter *pkt)
+{
+	PGP_Signature *sig;
+	int res;
+
+	res = pgp_parse_signature(ctx, &sig, pkt, 0);
 	if (res < 0)
 		return res;
-	return pullf_discard(pkt, -1);
+
+	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
+		sig->algo == ctx->sig_key->algo &&
+		sig->type == 0x00) /* TODO */
+	{
+		if (ctx->sig_expected)
+		{
+			pgp_sig_free(sig);
+			res = PXE_PGP_MULTIPLE_SIGNATURES;
+		}
+		else
+			ctx->sig_expected = sig;
+	}
+	else
+		pgp_sig_free(sig);
+
+	return res;
 }
+
 
 static int
 process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
@@ -1330,7 +1352,7 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 				res = parse_onepass_signature(ctx, dst, pkt);
 				break;
 			case PGP_PKT_SIGNATURE:
-				res = parse_signature(ctx, dst, pkt);
+				res = parse_signature(ctx, pkt);
 				break;
 			default:
 				px_debug("process_data_packets: unexpected pkt tag=%d", tag);
@@ -1380,7 +1402,7 @@ parse_symenc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_prefix, &prefix_filter, ctx, pf_decrypt);
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;
 
@@ -1423,11 +1445,11 @@ parse_symenc_mdc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_mdc, &mdc_filter, ctx, pf_decrypt);
+	res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_prefix, &prefix_filter, ctx, pf_mdc);
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_mdc);
 	if (res < 0)
 		goto out;
 
@@ -1527,7 +1549,7 @@ pgp_decrypt(PGP_Context *ctx, MBuf *msrc, MBuf *mdst)
 				else
 				{
 					got_key = 1;
-					res = parse_symenc_sesskey(ctx, pkt);
+					res = pgp_parse_symenc_sesskey(ctx, pkt);
 				}
 				break;
 			case PGP_PKT_SYMENCRYPTED_DATA:
@@ -1577,7 +1599,7 @@ pgp_decrypt(PGP_Context *ctx, MBuf *msrc, MBuf *mdst)
 }
 
 static void
-digest_v4_final_trailer(PGP_Context *ctx, PX_MD *md)
+digest_v4_final_trailer(PX_MD *md, PGP_Signature *sig)
 {
 	uint8 b;
 	int len;
@@ -1589,7 +1611,7 @@ digest_v4_final_trailer(PGP_Context *ctx, PX_MD *md)
 	px_md_update(md, &b, 1);
 
 	/* length of trailer, four octets in big endian */
-	len = mbuf_size(ctx->sig_digest_trailer);
+	len = mbuf_size(sig->trailer);
 	b = (len >> 24);
 	px_md_update(md, &b, 1);
 	b = (len >> 16) & 0xFF;
@@ -1608,24 +1630,26 @@ pgp_verify_signature(PGP_Context *ctx)
 	uint8 *trailer;
 	uint8 digest[PGP_MAX_DIGEST];
 	PX_MD *md = ctx->sig_digest_ctx;
+	PGP_Signature *sig = ctx->sig_expected;
 
 	/* TODO ? */
 	if (!ctx->sig_onepass || !ctx->sig_digest_ctx)
 		return PXE_PGP_NO_USABLE_SIGNATURE;
-
-	if (ctx->sig_version != 3 && ctx->sig_version != 4)
+	if (!sig)
 		return PXE_BUG;
-	if (!ctx->sig_digest_trailer)
+	if (sig->version != 3 && sig->version != 4)
+		return PXE_BUG;
+	if (!sig->trailer)
 		return PXE_BUG;
 
-	len = mbuf_grab(ctx->sig_digest_trailer, mbuf_avail(ctx->sig_digest_trailer), &trailer);
-	px_md_update(ctx->sig_digest_ctx, trailer, len);
-	if (ctx->sig_version == 4)
-		digest_v4_final_trailer(ctx, ctx->sig_digest_ctx);
-	px_md_finish(ctx->sig_digest_ctx, digest);
+	len = mbuf_grab(sig->trailer, mbuf_avail(sig->trailer), &trailer);
+	px_md_update(md, trailer, len);
+	if (sig->version == 4)
+		digest_v4_final_trailer(md, sig);
+	px_md_finish(md, digest);
 
-	elog(INFO, "%d %d, %d %d", ctx->sig_expected_digest[0], ctx->sig_expected_digest[1], digest[0], digest[1]);
-	if (memcmp(digest, ctx->sig_expected_digest, px_md_result_size(md)) != 0)
+	elog(INFO, "%d %d, %d %d", sig->expected_digest[0], sig->expected_digest[1], digest[0], digest[1]);
+	if (memcmp(digest, sig->expected_digest, px_md_result_size(md)) != 0)
 		return PXE_PGP_INVALID_SIGNATURE;
 
 	return 0;

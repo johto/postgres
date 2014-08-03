@@ -1,4 +1,4 @@
-/* contrib/pgcrypto/pgcrypto--1.1.sql */
+/* contrib/pgcrypto/pgcrypto--1.2.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pgcrypto" to load this file. \quit
@@ -186,11 +186,46 @@ AS 'MODULE_PATHNAME', 'pgp_pub_decrypt_bytea'
 LANGUAGE C IMMUTABLE STRICT;
 
 --
+-- pgp_pub_encrypt_sign(data, key, sigkey)
+--
+--CREATE FUNCTION pgp_pub_encrypt_sign(text, bytea, bytea)
+--RETURNS bytea
+--AS 'MODULE_PATHNAME', 'pgp_pub_encrypt_and_sign_text'
+--LANGUAGE C STRICT;
+
+CREATE FUNCTION pgp_pub_encrypt_sign_bytea(bytea, bytea, bytea)
+RETURNS bytea
+AS 'MODULE_PATHNAME', 'pgp_pub_encrypt_sign_bytea'
+LANGUAGE C STRICT;
+
+
+--
+-- pgp_pub_decrypt_verify(data, key, sigkey, psw, arg)
+--
+--CREATE FUNCTION pgp_pub_decrypt_and_verify(bytea, bytea, text, text)
+--RETURNS text
+--AS 'MODULE_PATHNAME', 'pgp_pub_decrypt_and_verify_text'
+--LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION pgp_pub_decrypt_verify_bytea(bytea, bytea, text, text)
+RETURNS bytea
+AS 'MODULE_PATHNAME', 'pgp_pub_decrypt_verify_bytea'
+LANGUAGE C IMMUTABLE STRICT;
+
+--
 -- PGP key ID
 --
 CREATE FUNCTION pgp_key_id(bytea)
 RETURNS text
 AS 'MODULE_PATHNAME', 'pgp_key_id_w'
+LANGUAGE C IMMUTABLE STRICT;
+
+--
+-- pgp_signature_keys(data, key, psw)
+--
+CREATE FUNCTION pgp_signature_keys(bytea, bytea, text)
+RETURNS text /* TODO */
+AS 'MODULE_PATHNAME', 'pgp_signature_keys_w'
 LANGUAGE C IMMUTABLE STRICT;
 
 --

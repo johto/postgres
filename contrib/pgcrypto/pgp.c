@@ -291,6 +291,28 @@ pgp_free(PGP_Context *ctx)
 }
 
 int
+pgp_sig_create(PGP_Signature **sig_p)
+{
+	PGP_Signature *sig;
+
+	sig = px_alloc(sizeof(PGP_Signature));
+	memset(sig, 0, sizeof(*sig));
+	sig->trailer = mbuf_create(256);
+	*sig_p = sig;
+	return 1;
+}
+
+int
+pgp_sig_free(PGP_Signature *sig)
+{
+	if (sig->trailer)
+		mbuf_free(sig->trailer);
+	px_memset(sig, 0, sizeof(*sig));
+	px_free(sig);
+	return 1;
+}
+
+int
 pgp_disable_mdc(PGP_Context *ctx, int disable)
 {
 	ctx->disable_mdc = disable ? 1 : 0;

@@ -108,6 +108,7 @@ void		px_free(void *p);
 #define PXE_PGP_MULTIPLE_SUBKEYS	-123
 #define PXE_PGP_NO_USABLE_SIGNATURE -124
 #define PXE_PGP_INVALID_SIGNATURE   -125
+#define PXE_PGP_MULTIPLE_SIGNATURES	-126
 
 
 typedef struct px_digest PX_MD;

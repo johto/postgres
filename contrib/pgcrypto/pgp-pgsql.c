@@ -54,6 +54,7 @@ PG_FUNCTION_INFO_V1(pgp_pub_decrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_pub_decrypt_text);
 
 PG_FUNCTION_INFO_V1(pgp_key_id_w);
+PG_FUNCTION_INFO_V1(pgp_signature_keys_w);
 
 PG_FUNCTION_INFO_V1(pg_armor);
 PG_FUNCTION_INFO_V1(pg_dearmor);
@@ -988,7 +989,7 @@ pg_dearmor(PG_FUNCTION_ARGS)
 }
 
 /*
- * Wrappers for PGP key id
+ * Wrapper for PGP key id
  */
 
 Datum
@@ -1013,4 +1014,48 @@ pgp_key_id_w(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_RETURN_TEXT_P(res);
+}
+
+Datum
+pgp_signature_keys_w(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key;
+	text	   *res;
+	int			res_len;
+	MBuf	   *buf;
+	PGP_Context *ctx;
+	struct debug_expect ex;
+	int err;
+
+	init_work(&ctx, 0, NULL, &ex);
+
+	key = PG_GETARG_BYTEA_P(1);
+	if (true)
+	{
+		MBuf *kbuf = create_mbuf_from_vardata(key);
+
+		err = pgp_set_pubkey(ctx, kbuf, NULL, 0, 1);
+		mbuf_free(kbuf);
+		if (err < 0)
+			goto error;
+	}
+
+	data = PG_GETARG_BYTEA_P(0);
+	buf = create_mbuf_from_vardata(data);
+	res = palloc(VARHDRSZ + 17);
+
+	err = pgp_get_signature_keys(ctx, buf);
+	mbuf_free(buf);
+
+error:
+	if (err < 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION),
+				 errmsg("%s", px_strerror(err))));
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	//PG_RETURN_TEXT_P(res);
+	PG_RETURN_NULL();
 }
