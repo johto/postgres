@@ -221,12 +221,21 @@ AS 'MODULE_PATHNAME', 'pgp_key_id_w'
 LANGUAGE C IMMUTABLE STRICT;
 
 --
--- pgp_signature_keys(data, key, psw)
+-- pgp_sym_signature_keys(data, psw)
 --
-CREATE FUNCTION pgp_signature_keys(bytea, bytea, text)
+CREATE FUNCTION pgp_sym_signature_keys(bytea, text)
 RETURNS text /* TODO */
-AS 'MODULE_PATHNAME', 'pgp_signature_keys_w'
+AS 'MODULE_PATHNAME', 'pgp_sym_signature_keys_w'
 LANGUAGE C IMMUTABLE STRICT;
+
+--
+-- pgp_pub_signature_keys(data, key, psw)
+--
+CREATE FUNCTION pgp_pub_signature_keys(bytea, bytea, text)
+RETURNS text /* TODO */
+AS 'MODULE_PATHNAME', 'pgp_pub_signature_keys_w'
+LANGUAGE C IMMUTABLE STRICT;
+
 
 --
 -- pgp armor

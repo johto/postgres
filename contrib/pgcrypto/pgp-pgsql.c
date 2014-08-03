@@ -54,7 +54,8 @@ PG_FUNCTION_INFO_V1(pgp_pub_decrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_pub_decrypt_text);
 
 PG_FUNCTION_INFO_V1(pgp_key_id_w);
-PG_FUNCTION_INFO_V1(pgp_signature_keys_w);
+PG_FUNCTION_INFO_V1(pgp_sym_signature_keys_w);
+PG_FUNCTION_INFO_V1(pgp_pub_signature_keys_w);
 
 PG_FUNCTION_INFO_V1(pg_armor);
 PG_FUNCTION_INFO_V1(pg_dearmor);
@@ -671,6 +672,51 @@ out:
 	return res;
 }
 
+static int
+signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw)
+{
+	PGP_Context	   *ctx = NULL;
+	MBuf		   *src = NULL;
+	int				err;
+	struct debug_expect ex;
+
+	init_work(&ctx, 0, NULL, &ex);
+
+	if (is_pubenc)
+	{
+		MBuf *kbuf = create_mbuf_from_vardata(key);
+
+		err = pgp_set_pubkey(ctx, kbuf, NULL, 0, 1);
+		mbuf_free(kbuf);
+		if (err < 0)
+			goto out;
+	}
+	else
+	{
+		err = pgp_set_symkey(ctx, (uint8 *) VARDATA(key),
+							 VARSIZE(key) - VARHDRSZ);
+		if (err < 0)
+			goto out;
+	}
+
+	src = create_mbuf_from_vardata(data);
+	err = pgp_get_signature_keys(ctx, src);
+
+out:
+	if (src)
+		mbuf_free(src);
+	if (ctx)
+		pgp_free(ctx);
+	if (err < 0)
+	{
+		px_set_debug_handler(NULL);
+		ereport(ERROR,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION),
+				 errmsg("%s", px_strerror(err))));
+	}
+	return 0;
+}
+
 /*
  * Wrappers for symmetric-key functions
  */
@@ -1017,37 +1063,42 @@ pgp_key_id_w(PG_FUNCTION_ARGS)
 }
 
 Datum
-pgp_signature_keys_w(PG_FUNCTION_ARGS)
+pgp_sym_signature_keys_w(PG_FUNCTION_ARGS)
+{
+	bytea	   *data;
+	text	   *psw;
+	text	   *res;
+	int err;
+
+	data = PG_GETARG_BYTEA_P(0);
+	psw = PG_GETARG_TEXT_P(1);
+
+	err = signature_keys_internal(0, data, psw, NULL);
+
+	if (err < 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION),
+				 errmsg("%s", px_strerror(err))));
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(psw, 1);
+	//PG_RETURN_TEXT_P(res);
+	PG_RETURN_NULL();
+}
+
+Datum
+pgp_pub_signature_keys_w(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key;
 	text	   *res;
-	MBuf	   *buf;
-	PGP_Context *ctx;
-	struct debug_expect ex;
 	int err;
 
-	init_work(&ctx, 0, NULL, &ex);
-
-	key = PG_GETARG_BYTEA_P(1);
-	if (true)
-	{
-		MBuf *kbuf = create_mbuf_from_vardata(key);
-
-		err = pgp_set_pubkey(ctx, kbuf, NULL, 0, 1);
-		mbuf_free(kbuf);
-		if (err < 0)
-			goto error;
-	}
-
 	data = PG_GETARG_BYTEA_P(0);
-	buf = create_mbuf_from_vardata(data);
-	res = palloc(VARHDRSZ + 17);
+	key = PG_GETARG_BYTEA_P(1);
 
-	err = pgp_get_signature_keys(ctx, buf);
-	mbuf_free(buf);
+	err = signature_keys_internal(1, data, key, NULL);
 
-error:
 	if (err < 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION),
