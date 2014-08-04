@@ -9,9 +9,9 @@ select pgp_sym_signature_keys.* from
     from keytbl where keytbl.name = 'rsa2048') encrypted,
     lateral pgp_sym_signature_keys(encrypted.ciphertext, 'key')
     ;
-      keyid       | digest 
-------------------+--------
- 9DCF8E9C9BD31F24 | sha512
+      keyid       | digest | pubkeyalgo 
+------------------+--------+------------
+ 9DCF8E9C9BD31F24 | sha512 | rsa
 (1 row)
 
 select pgp_pub_signature_keys.* from
@@ -19,9 +19,9 @@ select pgp_pub_signature_keys.* from
     from keytbl where keytbl.name = 'rsaenc2048') encrypted,
     lateral pgp_pub_signature_keys(encrypted.ciphertext, dearmor(encrypted.seckey))
     ;
-      keyid       | digest 
-------------------+--------
- C899EA9344195559 | sha512
+      keyid       | digest | pubkeyalgo 
+------------------+--------+------------
+ C899EA9344195559 | sha512 | rsa
 (1 row)
 
 -- decrypt without verifying the signature
@@ -120,17 +120,17 @@ select * from pgp_pub_decrypt_bytea((select dearmor(data) from encdata where id=
 (1 row)
 
 select * from pgp_sym_signature_keys((select dearmor(data) from encdata where id=5), 'key');
-      keyid       | digest 
-------------------+--------
- C899EA9344195559 | sha512
- 9DCF8E9C9BD31F24 | sha512
+      keyid       | digest | pubkeyalgo 
+------------------+--------+------------
+ C899EA9344195559 | sha512 | rsa
+ 9DCF8E9C9BD31F24 | sha512 | rsa
 (2 rows)
 
 select * from pgp_pub_signature_keys((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'));
-      keyid       | digest 
-------------------+--------
- C899EA9344195559 | sha1
- 9DCF8E9C9BD31F24 | sha1
+      keyid       | digest | pubkeyalgo 
+------------------+--------+------------
+ C899EA9344195559 | sha1   | rsa
+ 9DCF8E9C9BD31F24 | sha1   | rsa
 (2 rows)
 
 -- should match both signatures

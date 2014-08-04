@@ -353,7 +353,7 @@ LANGUAGE C IMMUTABLE STRICT;
 -- pgp_sym_signature_keys(data, psw)
 --
 CREATE FUNCTION pgp_sym_signature_keys(bytea, text)
-RETURNS TABLE (keyid text, digest text)
+RETURNS TABLE (keyid text, digest text, pubkeyalgo text)
 AS 'MODULE_PATHNAME', 'pgp_sym_signature_keys_w'
 LANGUAGE C IMMUTABLE STRICT;
 
@@ -361,7 +361,7 @@ LANGUAGE C IMMUTABLE STRICT;
 -- pgp_pub_signature_keys(data, key)
 --
 CREATE FUNCTION pgp_pub_signature_keys(bytea, bytea)
-RETURNS TABLE (keyid text, digest text)
+RETURNS TABLE (keyid text, digest text, pubkeyalgo text)
 AS 'MODULE_PATHNAME', 'pgp_pub_signature_keys_w'
 LANGUAGE C IMMUTABLE STRICT;
 
@@ -369,7 +369,7 @@ LANGUAGE C IMMUTABLE STRICT;
 -- pgp_pub_signature_keys(data, key, psw)
 --
 CREATE FUNCTION pgp_pub_signature_keys(bytea, bytea, text)
-RETURNS TABLE (keyid text, digest text)
+RETURNS TABLE (keyid text, digest text, pubkeyalgo text)
 AS 'MODULE_PATHNAME', 'pgp_pub_signature_keys_w'
 LANGUAGE C IMMUTABLE STRICT;
 

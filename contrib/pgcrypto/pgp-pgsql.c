@@ -703,11 +703,31 @@ static int
 materialize_signature_key_cb(void *opaque, PGP_Signature *sig, char *keyid)
 {
     struct MaterializeSignatureKeyCtx *ctx = opaque;
-    Datum values[2];
-    bool isnull[2] = { false, false };
+    const char *digestalgo;
+    const char *pubkeyalgo;
+    Datum values[3];
+    bool isnull[3] = { false, false, false };
+
+    digestalgo = pgp_get_digest_name(sig->digest_algo);
+    if (!digestalgo)
+        return PXE_PGP_UNSUPPORTED_HASH;
+
+    switch (sig->algo)
+    {
+        case PGP_PUB_RSA_ENCRYPT_SIGN:
+        case PGP_PUB_RSA_SIGN:
+            pubkeyalgo = "rsa";
+            break;
+        case PGP_PUB_DSA_SIGN:
+            pubkeyalgo = "dsa";
+            break;
+        default:
+            return PXE_PGP_UNSUPPORTED_PUBALGO;
+    }
 
     values[0] = CStringGetTextDatum(keyid);
-    values[1] = CStringGetTextDatum(pgp_get_digest_name(sig->digest_algo));
+    values[1] = CStringGetTextDatum(digestalgo);
+    values[2] = CStringGetTextDatum(pubkeyalgo);
     tuplestore_putvalues(ctx->tupstore, ctx->tupdesc, values, isnull);
     return 0;
 }
@@ -789,7 +809,7 @@ signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw,
 
 	/* get the requested return tuple description */
 	tupdesc = CreateTupleDescCopy(rsinfo->expectedDesc);
-	if (tupdesc->natts != 2)
+	if (tupdesc->natts != 3)
 		elog(ERROR, "unexpected natts %d", tupdesc->natts);
 
 	tupstore =

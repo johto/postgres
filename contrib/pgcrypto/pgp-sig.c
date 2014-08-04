@@ -55,7 +55,7 @@ pad_emsa_pkcs1_v15(uint8 *data, int data_len, int res_len, uint8 **res_p)
 	buf = px_alloc(res_len);
 	buf[0] = 0x01;
 	memset(buf+1, 0xFF, pad_len);
-	buf[pad_len + 1] = 0;
+	buf[pad_len + 1] = 0x00;
 	memcpy(buf + pad_len + 2, data, data_len);
 	*res_p = buf;
 
