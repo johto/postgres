@@ -1261,7 +1261,7 @@ pgp_pub_signature_keys_w(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
     if (PG_NARGS() > 2)
-        keypsw = PG_GETARG_BYTEA_P(2);
+        PG_FREE_IF_COPY(psw, 2);
 
     return (Datum) 0;
 }
