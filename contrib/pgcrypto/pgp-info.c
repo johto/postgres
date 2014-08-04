@@ -106,7 +106,52 @@ typedef int (*sig_key_cb_type)(void *opaque, PGP_Signature *sig);
 
 static int
 extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
-					   sig_key_cb_type sig_key_cb)
+					   sig_key_cb_type sig_key_cb, int allow_compr);
+
+
+static int
+read_signature_keys_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
+                                         void *opaque, sig_key_cb_type sig_key_cb)
+{
+    int res;
+    uint8 type;
+    PullFilter *pf_decompr;
+
+    GETBYTE(pkt, type);
+
+    ctx->compress_algo = type;
+    switch (type)
+    {
+        case PGP_COMPR_NONE:
+            res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
+            break;
+
+        case PGP_COMPR_ZIP:
+        case PGP_COMPR_ZLIB:
+            res = pgp_decompress_filter(&pf_decompr, ctx, pkt);
+            if (res >= 0)
+            {
+                res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
+                pullf_free(pf_decompr);
+            }
+            break;
+
+        case PGP_COMPR_BZIP2:
+            px_debug("read_signature_keys_from_compressed_data: bzip2 unsupported");
+            res = PXE_PGP_UNSUPPORTED_COMPR;
+            break;
+
+        default:
+            px_debug("parse_compressed_data: unknown compr type");
+            res = PXE_PGP_CORRUPT_DATA;
+    }
+
+    return res;
+}
+
+static int
+extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
+					   sig_key_cb_type sig_key_cb, int allow_compr)
 {
 	int res;
 	PGP_Signature *sig = NULL;
@@ -116,7 +161,7 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 
 	while (1)
 	{
-		res = pgp_parse_pkt_hdr(src, &tag, &len, 0);
+		res = pgp_parse_pkt_hdr(src, &tag, &len, 1);
 		if (res <= 0)
 			break;
 		res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
@@ -130,9 +175,17 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 				if (res >= 0)
 					res = sig_key_cb(opaque, sig);
 				break;
+			case PGP_PKT_COMPRESSED_DATA:
+                if (!allow_compr)
+                {
+                    px_debug("extract_signature_keys: unexpected compression");
+                    res = PXE_PGP_CORRUPT_DATA;
+                }
+                else
+                    res = read_signature_keys_from_compressed_data(ctx, pkt, opaque, sig_key_cb);
+                break;
 			case PGP_PKT_ONEPASS_SIGNATURE:
 			case PGP_PKT_LITERAL_DATA:
-			case PGP_PKT_COMPRESSED_DATA:
 			case PGP_PKT_MDC:
 			case PGP_PKT_TRUST:
 				res = pgp_skip_packet(pkt);
@@ -200,7 +253,7 @@ read_signature_keys_from_data(PGP_Context *ctx, PullFilter *pkt, int tag,
 	if (res < 0)
 		goto out;
 
-	res = extract_signature_keys(ctx, pf_prefix, opaque, sig_key_cb);
+	res = extract_signature_keys(ctx, pf_prefix, opaque, sig_key_cb, 1);
 
 out:
 	if (pf_prefix)

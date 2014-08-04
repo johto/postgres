@@ -156,7 +156,15 @@ pgp_parse_pkt_hdr(PullFilter *src, uint8 *tag, int *len_p, int allow_ctx)
 		lentype = *p & 3;
 		*tag = (*p >> 2) & 0x0F;
 		if (lentype == 3)
-			res = allow_ctx ? PKT_CONTEXT : PXE_PGP_CORRUPT_DATA;
+        {
+            if (!allow_ctx)
+            {
+                px_debug("pgp_parse_pkt_hdr: lentype==3 but allow_context is false");
+                res = PXE_PGP_CORRUPT_DATA;
+            }
+            else
+                res = PKT_CONTEXT;
+        }
 		else
 			res = parse_old_len(src, len_p, lentype);
 	}
