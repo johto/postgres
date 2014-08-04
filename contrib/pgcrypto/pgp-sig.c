@@ -676,10 +676,10 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 	msglen = m->bytes - (msg - m->data);
 
 	prefix_len = pgp_get_digest_asn1_prefix(sig->digest_algo, asn1_prefix);
-	/* should have been checked already */
 	if (prefix_len < 0)
 	{
-		res = PXE_BUG;
+        px_debug("digest algo %d does not have an ASN1 prefix", sig->digest_algo);
+		res = PXE_PGP_UNSUPPORTED_HASH;
 		goto out;
 	}
 	if (msglen < prefix_len ||
