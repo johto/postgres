@@ -142,7 +142,7 @@ read_signature_keys_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
             break;
 
         default:
-            px_debug("parse_compressed_data: unknown compr type");
+            px_debug("read_signature_keys_from_compressed_data: unknown compr type");
             res = PXE_PGP_CORRUPT_DATA;
     }
 
