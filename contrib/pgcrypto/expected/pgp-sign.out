@@ -24,6 +24,46 @@ select pgp_pub_signature_keys.* from
  C899EA9344195559 | sha512
 (1 row)
 
+-- decrypt without verifying the signature
+select pgp_sym_decrypt_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key')
+from keytbl where keytbl.name = 'rsa2048';
+ pgp_sym_decrypt_bytea 
+-----------------------
+ Secret.
+(1 row)
+
+-- decrypt and verify the signature
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+ pgp_sym_decrypt_verify_bytea 
+------------------------------
+ Secret.
+(1 row)
+
+-- decrypt and verify the signature, wrong key
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(keytbl1.seckey)), 'key', dearmor(keytbl2.pubkey))
+from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
+ERROR:  No usable signature in the message
+-- decrypt without verifying the signature, pub
+select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
+from keytbl where keytbl.name = 'rsaenc2048';
+ pgp_pub_decrypt_bytea 
+-----------------------
+ Secret.
+(1 row)
+
+-- decrypt and verify the signature, pub
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+ pgp_pub_decrypt_verify_bytea 
+------------------------------
+ Secret.
+(1 row)
+
+-- decrypt and verify the signature, pub, wrong key
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(keytbl2.pubkey), dearmor(keytbl1.seckey)), dearmor(keytbl2.seckey), dearmor(keytbl2.pubkey))
+from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
+ERROR:  No usable signature in the message
 -- multiple signers
 insert into encdata(id, data) values (5, '
 -----BEGIN PGP MESSAGE-----
@@ -93,43 +133,16 @@ select * from pgp_pub_signature_keys((select dearmor(data) from encdata where id
  9DCF8E9C9BD31F24 | sha1
 (2 rows)
 
--- decrypt without verifying the signature
-select pgp_sym_decrypt_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key')
-from keytbl where keytbl.name = 'rsa2048';
- pgp_sym_decrypt_bytea 
------------------------
- Secret.
-(1 row)
-
--- decrypt and verify the signature
-select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
-from keytbl where keytbl.name = 'rsa2048';
- pgp_sym_decrypt_verify_bytea 
-------------------------------
- Secret.
-(1 row)
-
--- decrypt and verify the signature, wrong key
-select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(keytbl1.seckey)), 'key', dearmor(keytbl2.pubkey))
-from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
-ERROR:  No usable signature in the message
--- decrypt without verifying the signature, pub
-select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
-from keytbl where keytbl.name = 'rsaenc2048';
- pgp_pub_decrypt_bytea 
------------------------
- Secret.
-(1 row)
-
--- decrypt and verify the signature, pub
-select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
-from keytbl where keytbl.name = 'rsaenc2048';
+-- should match both signatures
+select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsa2048'));
  pgp_pub_decrypt_verify_bytea 
 ------------------------------
- Secret.
+ hello world
 (1 row)
 
--- decrypt and verify the signature, pub, wrong key
-select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(keytbl2.pubkey), dearmor(keytbl1.seckey)), dearmor(keytbl2.seckey), dearmor(keytbl2.pubkey))
-from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
-ERROR:  No usable signature in the message
+select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsaenc2048'));
+ pgp_pub_decrypt_verify_bytea 
+------------------------------
+ hello world
+(1 row)
+

@@ -253,10 +253,10 @@ struct PGP_Signature
 	uint8   digest_algo;
 
     /* only present if this is not a one-pass signature */
-	uint8 creation_time[4];
-	uint8 expected_digest[PGP_MAX_DIGEST];
-	uint8 expected_digest_l16[2];
-	MBuf *trailer;
+	uint8   creation_time[4];
+	uint8   expected_digest[PGP_MAX_DIGEST];
+	uint8   expected_digest_l16[2];
+	MBuf   *trailer;
 };
 
 int			pgp_init(PGP_Context **ctx);
@@ -347,7 +347,7 @@ int			pgp_write_signature(PGP_Context *ctx, PushFilter *dst);
 int         pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
                                         PullFilter *pkt);
 int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
-								PullFilter *pkt, int parseonly);
+								PullFilter *pkt, uint8 *expected_keyid);
 int			pgp_verify_signature(PGP_Context *ctx);
 
 

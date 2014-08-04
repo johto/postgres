@@ -907,8 +907,7 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
             pgp_sig_free(sig);
             return PXE_PGP_MULTIPLE_SIGNATURES;
         }
-		/* TODO: verify that we support the digest algo */
-		res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
+		res = pgp_load_digest(sig->digest_algo, &ctx->sig_digest_ctx);
 		if (res < 0)
         {
             pgp_sig_free(sig);
@@ -932,7 +931,7 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 	if (!ctx->sig_key)
 		return pgp_skip_packet(pkt);
 
-	res = pgp_parse_signature(ctx, &sig, pkt, 0);
+	res = pgp_parse_signature(ctx, &sig, pkt, ctx->sig_key->key_id);
 	if (res < 0)
 		return res;
 
@@ -1017,11 +1016,6 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 					 */
 					px_debug("process_data_packets: only one cmpr pkt allowed");
 					res = PXE_PGP_CORRUPT_DATA;
-				}
-				else if (ctx->sig_key && !ctx->sig_onepass)
-				{
-					px_debug("no usable one-pass signatures found");
-					res = PXE_PGP_NO_USABLE_SIGNATURE;
 				}
 				else
 				{

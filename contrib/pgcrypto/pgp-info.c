@@ -171,7 +171,7 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 		switch (tag)
 		{
 			case PGP_PKT_SIGNATURE:
-				res = pgp_parse_signature(ctx, &sig, pkt, 1);
+				res = pgp_parse_signature(ctx, &sig, pkt, NULL);
 				if (res >= 0)
 					res = sig_key_cb(opaque, sig);
 				break;
@@ -348,7 +348,7 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 			case PGP_PKT_SIGNATURE:
 				if (sig_key_cb)
 				{
-					res = pgp_parse_signature(ctx, &sig, pkt, 1);
+					res = pgp_parse_signature(ctx, &sig, pkt, NULL);
 					if (res >= 0)
 						res = sig_key_cb(opaque, sig);
 				}

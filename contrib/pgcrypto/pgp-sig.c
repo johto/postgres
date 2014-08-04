@@ -652,6 +652,7 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 
 	switch (pk->algo)
 	{
+        case PGP_PUB_RSA_SIGN:
 		case PGP_PUB_RSA_ENCRYPT_SIGN:
 			res = decrypt_rsa_signature(pk, pkt, &m);
 			break;
@@ -693,7 +694,6 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 		res = PXE_PGP_WRONG_KEY;
 		goto out;
 	}
-	/* TODO: check lenght of haxh? */
 	memcpy(sig->expected_digest, msg + prefix_len, msglen);
 
 out:
@@ -739,7 +739,7 @@ pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter 
 }
 
 int
-pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, int parseonly)
+pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, uint8 *expected_keyid)
 {
 	int		version;
 	int		res;
@@ -761,10 +761,11 @@ pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, in
 	if (res < 0)
 		goto err;
 
-	if (parseonly)
-		res = pullf_discard(pkt, -1);
-	else
+    if (expected_keyid &&
+        memcmp(expected_keyid, sig->keyid, 8) == 0)
 		res = parse_signature_payload(ctx, pkt, sig);
+    else
+		res = pullf_discard(pkt, -1);
 
 err:
 	if (res < 0)
