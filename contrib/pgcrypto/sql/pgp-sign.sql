@@ -4,6 +4,18 @@
 -- ensure consistent test output regardless of the default bytea format
 SET bytea_output TO escape;
 
+-- list keys
+select pgp_sym_signature_keys.* from
+    (select pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)) as ciphertext
+    from keytbl where keytbl.name = 'rsa2048') encrypted,
+    lateral pgp_sym_signature_keys(encrypted.ciphertext, 'key')
+    ;
+select pgp_pub_signature_keys.* from
+    (select seckey, pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)) as ciphertext
+    from keytbl where keytbl.name = 'rsaenc2048') encrypted,
+    lateral pgp_pub_signature_keys(encrypted.ciphertext, dearmor(encrypted.seckey))
+    ;
+
 -- decrypt without verifying the signature
 select pgp_sym_decrypt_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key')
 from keytbl where keytbl.name = 'rsa2048';

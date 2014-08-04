@@ -364,9 +364,9 @@ static const uint8 any_key[] =
 {0, 0, 0, 0, 0, 0, 0, 0};
 
 static int
-get_keyid_cb(void *ctx, uint8 keyid[8])
+get_keyid_cb(void *opaque, uint8 keyid[8])
 {
-	char *dst = (char *) ctx;
+	char *dst = (char *) opaque;
 	if (keyid == NULL)
 	{
 		memcpy(dst, "SYMKEY", 7);
@@ -381,15 +381,6 @@ get_keyid_cb(void *ctx, uint8 keyid[8])
 		return print_key(keyid, dst);
 }
 
-static int
-get_signature_key_cb(void *ctx, PGP_Signature *sig)
-{
-	char dst[17];
-	print_key(sig->keyid, dst);
-	elog(INFO, "keyid %s", dst);
-	return 0;
-}
-
 /*
  * dst should have room for 17 bytes
  */
@@ -399,8 +390,32 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 	return get_key_information(NULL, pgp_data, dst, get_keyid_cb, NULL);
 }
 
-int
-pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data)
+struct GetSignatureKeyCtx
 {
-	return get_key_information(ctx, pgp_data, NULL /* TODO */, NULL, get_signature_key_cb);
+    int (*cb)(void *opaque, PGP_Signature *sig, char *keyid);
+    void *opaque;
+};
+
+static int
+get_signature_key_cb(void *opaque, PGP_Signature *sig)
+{
+    char keyid[17];
+    struct GetSignatureKeyCtx *ctx = opaque;
+    if (memcmp(sig->keyid, any_key, 8) == 0)
+        memcpy(keyid, "ANYKEY", 7);
+    else
+        print_key(sig->keyid, keyid);
+    return ctx->cb(ctx->opaque, sig, keyid);
+}
+
+int
+pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+                       int (*cb)(void *opaque, PGP_Signature *sig, char *keyid))
+{
+    struct GetSignatureKeyCtx cbctx;
+
+    memset(&cbctx, 0, sizeof(cbctx));
+    cbctx.cb = cb;
+    cbctx.opaque = opaque;
+	return get_key_information(ctx, pgp_data, &cbctx, NULL, get_signature_key_cb);
 }

@@ -882,6 +882,7 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
     PGP_Signature *sig;
 	int		res;
 
+    /* don't bother if we weren't asked to verify signatures */
     if (!ctx->sig_key)
         return pgp_skip_packet(pkt);
 
@@ -899,13 +900,14 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
             return PXE_PGP_MULTIPLE_SIGNATURES;
         }
 		/* TODO: verify that we support the digest algo */
-		ctx->sig_onepass = sig;
 		res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
 		if (res < 0)
         {
             pgp_sig_free(sig);
 			return res;
         }
+        else
+            ctx->sig_onepass = sig;
 	}
     else
         res = pgp_sig_free(sig);
@@ -918,6 +920,7 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 	PGP_Signature *sig;
 	int res;
 
+    /* don't bother if we weren't asked to verify signatures */
 	if (!ctx->sig_key)
 		return pgp_skip_packet(pkt);
 
