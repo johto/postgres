@@ -704,6 +704,41 @@ out:
 }
 
 int
+pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt)
+{
+    PGP_Signature *sig;
+	uint8		version;
+	uint8		type;
+	uint8		digestalgo;
+	uint8		pubkeyalgo;
+	uint8		last;
+    uint8       keyid[8];
+	int         res;
+
+	GETBYTE(pkt, version);
+	GETBYTE(pkt, type);
+	GETBYTE(pkt, digestalgo);
+	GETBYTE(pkt, pubkeyalgo);
+	res = pullf_read_fixed(pkt, 8, keyid);
+	if (res < 0)
+		return res;
+	GETBYTE(pkt, last);
+
+    res = pgp_sig_create(&sig);
+    if (res < 0)
+        return res;
+
+    sig->onepass = 1;
+    memcpy(sig->keyid, keyid, 8);
+    sig->version = version;
+    sig->type = type;
+    sig->digest_algo = digestalgo;
+    sig->algo = pubkeyalgo;
+    *sig_p = sig;
+    return 0;
+}
+
+int
 pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, int parseonly)
 {
 	int		version;
@@ -765,7 +800,6 @@ pgp_verify_signature(PGP_Context *ctx)
 		digest_v4_final_trailer(md, len);
 	px_md_finish(md, digest);
 
-	elog(INFO, "%d %d, %d %d", sig->expected_digest[0], sig->expected_digest[1], digest[0], digest[1]);
 	if (memcmp(digest, sig->expected_digest, px_md_result_size(md)) != 0)
 		return PXE_PGP_INVALID_SIGNATURE;
 

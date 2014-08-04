@@ -363,7 +363,6 @@ process_secret_key(PullFilter *pkt, PGP_PubKey **pk_p,
 		if (key == NULL)
 			return PXE_PGP_NEED_SECRET_PSW;
 		GETBYTE(pkt, cipher_algo);
-		elog(INFO, "cipher algo is %d", cipher_algo);
 		res = pgp_s2k_read(pkt, &s2k);
 		if (res < 0)
 			return res;

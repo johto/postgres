@@ -879,42 +879,37 @@ parse_compressed_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 static int
 parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 {
-	int		version;
-	int		type;
-	int		digestalgo;
-	int		pubkeyalgo;
-	int		last;
+    PGP_Signature *sig;
 	int		res;
-	uint8	keyid[8];
 
-	GETBYTE(pkt, version);
-	GETBYTE(pkt, type);
-	GETBYTE(pkt, digestalgo);
-	GETBYTE(pkt, pubkeyalgo);
-	res = pullf_read_fixed(pkt, 8, keyid);
-	if (res < 0)
+    if (!ctx->sig_key)
+        return pgp_skip_packet(pkt);
+
+    res = pgp_parse_onepass_signature(ctx, &sig, pkt);
+    if (res < 0)
 		return res;
-	GETBYTE(pkt, last);
 
-	if (!ctx->sig_key)
-		return 0;
-
-	/* is this the key we want? */
-	/* TODO */
-#if 0
-	if (memcmp(keyid, ctx->sig_key->key_id, 8) == 0 &&
-		pubkeyalgo == ctx->sig_key->algo)
+	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
+		sig->algo == ctx->sig_key->algo &&
+        sig->type == 0x00 /* TODO */)
 	{
+        if (ctx->sig_onepass)
+        {
+            pgp_sig_free(sig);
+            return PXE_PGP_MULTIPLE_SIGNATURES;
+        }
 		/* TODO: verify that we support the digest algo */
-		ctx->digest_algo = digestalgo;
-		ctx->sig_onepass = 1;
+		ctx->sig_onepass = sig;
 		res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
 		if (res < 0)
+        {
+            pgp_sig_free(sig);
 			return res;
+        }
 	}
-#endif
-
-	return 0;
+    else
+        res = pgp_sig_free(sig);
+	return res;
 }
 
 static int
@@ -1012,7 +1007,7 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 					px_debug("process_data_packets: only one cmpr pkt allowed");
 					res = PXE_PGP_CORRUPT_DATA;
 				}
-				else if (!ctx->sig_onepass)
+				else if (ctx->sig_key && !ctx->sig_onepass)
 				{
 					px_debug("no usable one-pass signatures found");
 					res = PXE_PGP_NO_USABLE_SIGNATURE;

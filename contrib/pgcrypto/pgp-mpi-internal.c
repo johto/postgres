@@ -259,51 +259,46 @@ pgp_dsa_sign(PGP_PubKey *pk, PGP_MPI *_m,
 	mpz_t	   *m = mpi_to_bn(_m);
 	mpz_t	   *p = mpi_to_bn(pk->pub.dsa.p);
 	mpz_t	   *q = mpi_to_bn(pk->pub.dsa.q);
+    mpz_t      *g = mpi_to_bn(pk->pub.dsa.g);
 	mpz_t	   *x = mpi_to_bn(pk->sec.dsa.x);
 	mpz_t	   *k = mp_new();
 	mpz_t	   *r = mp_new();
 	mpz_t	   *s = mp_new();
 	mpz_t	   *xr = mp_new();
 
-	if (!m || !p || !q || !x || !k || !r || !s || !xr)
+	if (!m || !p || !q || !g || !x || !k || !r || !s || !xr)
 		goto err;
 
-	for (;;)
-	{
-		/*
-		 * generate k
-		 */
-		k_bits = decide_k_bits(mp_int_count_bits(p));
-		res = mp_px_rand(k_bits, k);
-		if (res < 0)
-			goto err;
+again:
+    /*
+     * generate k
+     */
+    k_bits = decide_k_bits(mp_int_count_bits(p));
+    res = mp_px_rand(k_bits, k);
+    if (res < 0)
+        goto err;
 
-		/*
-		 * r = (g^k mod p) mod q
-		 */
-		mp_int_exptmod(g, k, p, r);
-		mp_int_mod(r, q, r);
-		if (mp_int_compare_zero(z) == 0)
-			continue;
-
-		
-
-		mp_int_sub_value(k, 1, k);
-		mp_int_exptmod(y, k, p, yk);
-		mp_modmul(m, yk, p, c2);
+    /*
+     * r = (g^k mod p) mod q
+     */
+    mp_int_exptmod(g, k, p, r);
+    mp_int_mod(r, q, r);
+    if (mp_int_compare_zero(r) == 0)
+        goto again;
 
 	/* result */
-	*c1_p = bn_to_mpi(c1);
-	*c2_p = bn_to_mpi(c2);
+	*c1_p = bn_to_mpi(r);
+	*c2_p = bn_to_mpi(s);
 	if (*c1_p && *c2_p)
 		res = 0;
 err:
-	mp_clear_free(c2);
-	mp_clear_free(c1);
-	mp_clear_free(yk);
+	mp_clear_free(xr);
+	mp_clear_free(s);
+	mp_clear_free(r);
 	mp_clear_free(k);
-	mp_clear_free(y);
+	mp_clear_free(x);
 	mp_clear_free(g);
+	mp_clear_free(q);
 	mp_clear_free(p);
 	mp_clear_free(m);
 	return res;
