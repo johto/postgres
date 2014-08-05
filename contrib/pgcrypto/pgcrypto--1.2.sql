@@ -349,6 +349,12 @@ RETURNS text
 AS 'MODULE_PATHNAME', 'pgp_key_id_w'
 LANGUAGE C IMMUTABLE STRICT;
 
+CREATE FUNCTION pgp_main_key_id(bytea)
+RETURNS text
+AS 'MODULE_PATHNAME', 'pgp_main_key_id_w'
+LANGUAGE C IMMUTABLE STRICT;
+
+
 --
 -- pgp_sym_signature_keys(data, psw)
 --

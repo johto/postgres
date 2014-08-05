@@ -269,7 +269,8 @@ out:
 }
 
 static int
-get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
+                    void *opaque,
 					int (*key_cb)(void *opaque, uint8 keyid[8]),
 					sig_key_cb_type sig_key_cb)
 {
@@ -304,22 +305,27 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 		{
 			case PGP_PKT_SECRET_KEY:
 			case PGP_PKT_PUBLIC_KEY:
-				/* main key is for signing, so ignore it */
-				if (!got_main_key)
-				{
+				if (got_main_key)
+                    res = PXE_PGP_MULTIPLE_KEYS;
+                else
+                {
 					got_main_key = 1;
-					res = pgp_skip_packet(pkt);
-				}
-				else
-					res = PXE_PGP_MULTIPLE_KEYS;
+                    if (want_main_key)
+                        res = read_pubkey_keyid(pkt, keyid_buf);
+                    else
+                        res = pgp_skip_packet(pkt);
+                }
 				break;
 			case PGP_PKT_SECRET_SUBKEY:
 			case PGP_PKT_PUBLIC_SUBKEY:
-				res = read_pubkey_keyid(pkt, keyid_buf);
-				if (res < 0)
-					break;
-				if (res > 0)
-					got_pub_key++;
+                if (want_main_key)
+                    res = pgp_skip_packet(pkt);
+                else
+                {
+                    res = read_pubkey_keyid(pkt, keyid_buf);
+                    if (res > 0)
+                        got_pub_key++;
+                }
 				break;
 			case PGP_PKT_SYMENCRYPTED_SESSKEY:
 				got_symenc_key++;
@@ -402,12 +408,22 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
 
 	if (key_cb)
 	{
-		if (got_pubenc_key || got_pub_key)
-			res = key_cb(opaque, keyid_buf);
-		else if (got_symenc_key)
-			res = key_cb(opaque, NULL);
-		else
-			res = PXE_PGP_NO_USABLE_KEY;
+        if (want_main_key)
+        {
+            if (!got_main_key)
+                res = PXE_PGP_NO_SIGN_KEY;
+            else
+                res = key_cb(opaque, keyid_buf);
+        }
+        else
+        {
+            if (got_pubenc_key || got_pub_key)
+                res = key_cb(opaque, keyid_buf);
+            else if (got_symenc_key)
+                res = key_cb(opaque, NULL);
+            else
+                res = PXE_PGP_NO_USABLE_KEY;
+        }
 	}
 
 	return res;
@@ -438,9 +454,9 @@ get_keyid_cb(void *opaque, uint8 keyid[8])
  * dst should have room for 17 bytes
  */
 int
-pgp_get_keyid(MBuf *pgp_data, char *dst)
+pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst)
 {
-	return get_key_information(NULL, pgp_data, dst, get_keyid_cb, NULL);
+	return get_key_information(NULL, pgp_data, want_main_key, dst, get_keyid_cb, NULL);
 }
 
 struct GetSignatureKeyCtx
@@ -470,5 +486,5 @@ pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
     memset(&cbctx, 0, sizeof(cbctx));
     cbctx.cb = cb;
     cbctx.opaque = opaque;
-	return get_key_information(ctx, pgp_data, &cbctx, NULL, get_signature_key_cb);
+	return get_key_information(ctx, pgp_data, 0, &cbctx, NULL, get_signature_key_cb);
 }
