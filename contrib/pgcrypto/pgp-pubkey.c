@@ -472,7 +472,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
     /*
      * Find the key to use for encryption, decryption, signing or verifying
      * from src, and place it into *pk_p.  An error is returned if the input
-     * has multiple main keys or if asked for an encryption key, if there are
+     * has multiple main keys or if asked for an encryption key and there are
      * multiple subkeys capable of encryption.
      */
 	while (1)
