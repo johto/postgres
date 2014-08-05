@@ -348,7 +348,7 @@ int         pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
                                         PullFilter *pkt);
 int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
 								PullFilter *pkt, uint8 *expected_keyid);
-int			pgp_verify_signature(PGP_Context *ctx, MBuf *data);
+int			pgp_verify_signature(PGP_Context *ctx);
 
 
 int			pgp_mpi_alloc(int bits, PGP_MPI **mpi);

@@ -910,6 +910,11 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
             pgp_sig_free(sig);
             return PXE_PGP_MULTIPLE_SIGNATURES;
         }
+        if (ctx->sig_digest_ctx)
+        {
+            pgp_sig_free(sig);
+            return PXE_BUG;
+        }
 		res = pgp_load_digest(sig->digest_algo, &ctx->sig_digest_ctx);
 		if (res < 0)
         {
@@ -943,20 +948,25 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 		sig->type == 0x00) /* TODO */
 	{
 		if (ctx->sig_expected)
-		{
-			pgp_sig_free(sig);
 			res = PXE_PGP_MULTIPLE_SIGNATURES;
-		}
-        /* check that this one matches the options in the one-pass signature */
-		else if (ctx->sig_onepass &&
-                (ctx->sig_onepass->algo != sig->algo ||
-                 ctx->sig_onepass->digest_algo != sig->digest_algo))
+        else if (ctx->sig_onepass)
         {
-            pgp_sig_free(sig);
-            res = PXE_PGP_CONFLICTING_SIGNATURES;
+            if (ctx->sig_onepass->algo != sig->algo ||
+                ctx->sig_onepass->digest_algo != sig->digest_algo)
+                res = PXE_PGP_CONFLICTING_SIGNATURES;
         }
         else
-			ctx->sig_expected = sig;
+        {
+            if (ctx->sig_digest_ctx)
+                res = PXE_BUG;
+            else
+                res = pgp_load_digest(sig->digest_algo, &ctx->sig_digest_ctx);
+        }
+
+        if (res < 0)
+            pgp_sig_free(sig);
+        else
+            ctx->sig_expected = sig;
 	}
 	else
 		pgp_sig_free(sig);
@@ -1003,8 +1013,17 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 		switch (tag)
 		{
 			case PGP_PKT_LITERAL_DATA:
-                got_data = 1;
-                res = parse_literal_data(ctx, dst, pkt);
+                if (ctx->sig_key && !ctx->sig_onepass && !ctx->sig_expected)
+                {
+                    px_debug("process_data_packets: no signature or one-pass"
+                             "signature before literal data");
+                    res = PXE_PGP_NO_SIGNATURE;
+                }
+                else
+                {
+                    got_data = 1;
+                    res = parse_literal_data(ctx, dst, pkt);
+                }
 				break;
 			case PGP_PKT_COMPRESSED_DATA:
 				if (allow_compr == 0)

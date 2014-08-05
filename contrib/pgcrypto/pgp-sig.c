@@ -776,42 +776,18 @@ err:
 
 
 int
-pgp_verify_signature(PGP_Context *ctx, MBuf *data)
+pgp_verify_signature(PGP_Context *ctx)
 {
 	int len;
-    uint8 *body;
 	uint8 *trailer;
 	uint8 digest[PGP_MAX_DIGEST];
-	PX_MD *md;
+	PX_MD *md = ctx->sig_digest_ctx;
 	PGP_Signature *sig = ctx->sig_expected;
 
-	if (!sig)
-		return PXE_PGP_NO_SIGNATURE;
-
+    if (!md)
+        return PXE_BUG;
 	if (sig->version != 3 && sig->version != 4)
 		return PXE_BUG;
-
-    md = ctx->sig_digest_ctx;
-    if (!md)
-    {
-        int res;
-
-        /*
-         * If no one-pass signature packet was found, we need to do a
-         * pass over the data to calculate its hash.  However, if
-         * convert-crlf was specified, the data we need to calculate the
-         * hash over is already gone and we should complain.
-         */
-
-        /* XXX: convert-crlf? */
-
-        res = pgp_load_digest(sig->digest_algo, &md);
-        if (res < 0)
-            return res;
-        ctx->sig_digest_ctx = md;
-        len = mbuf_grab(data, mbuf_avail(data), &body);
-        px_md_update(md, body, len);
-    }
 
 	len = mbuf_grab(sig->trailer, mbuf_avail(sig->trailer), &trailer);
 	px_md_update(md, trailer, len);
