@@ -594,10 +594,16 @@ init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
 	res = write_normal_header(dst, PGP_PKT_ONEPASS_SIGNATURE, 4 + 8 + 1);
 	if (res < 0)
 		return res;
+
 	hdr[0] = ver;
-	hdr[1] = 0x00; /* key type, TODO? */
+
+    if (ctx->text_mode && ctx->convert_crlf)
+        hdr[1] = PGP_SIGTYP_TEXT;
+    else
+        hdr[1] = PGP_SIGTYP_BINARY;
+
 	hdr[2] = ctx->digest_algo;
-	hdr[3] = PGP_PUB_RSA_ENCRYPT_SIGN;
+	hdr[3] = ctx->sig_key->algo;
 	res = pushf_write(dst, hdr, sizeof(hdr));
 	if (res < 0)
 		return res;

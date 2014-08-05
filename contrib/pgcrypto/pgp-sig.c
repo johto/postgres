@@ -352,6 +352,7 @@ err:
 	return res;
 }
 
+
 /*
  * Parses a one, two or five-octet length from a packet.  Partial Body Lengths
  * are not supported.  Returns 0 if EOF was reached when trying to read the
