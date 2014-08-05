@@ -417,10 +417,10 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
 	{
         if (want_main_key)
         {
-            if (!got_main_key)
-                res = PXE_PGP_NO_SIGN_KEY;
-            else
+            if (got_main_key)
                 res = key_cb(opaque, keyid_buf);
+            else
+                res = PXE_PGP_NO_SIGN_KEY;
         }
         else
         {
