@@ -696,7 +696,7 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 			res = decrypt_rsa_signature(pk, pkt, &m);
 			break;
 		default:
-			/* TODO */
+            /* only RSA is currently supported */
 			res = PXE_PGP_UNKNOWN_PUBALGO;
 	}
 	if (res < 0)

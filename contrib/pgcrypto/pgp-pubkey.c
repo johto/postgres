@@ -455,13 +455,10 @@ process_secret_key(PullFilter *pkt, PGP_PubKey **pk_p,
 	return res;
 }
 
-/*
- * XXX
- */
 static int
 internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 				  const uint8 *psw, int psw_len, int pubtype,
-				  int encrypt)
+				  int want_encrypt)
 {
 	PullFilter *pkt = NULL;
 	int			res;
@@ -472,11 +469,12 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 	PGP_PubKey *pk = NULL;
 	int			got_main_key = 0;
 
-	/*
-	 * Search for encryption key.
-	 *
-	 * Error out on anything fancy.
-	 */
+    /*
+     * Find the key to use for encryption, decryption, signing or verifying
+     * from src, and place it into *pk_p.  An error is returned if the input
+     * has multiple main keys or if asked for an encryption key, if there are
+     * multiple subkeys capable of encryption.
+     */
 	while (1)
 	{
 		res = pgp_parse_pkt_hdr(src, &tag, &len, 0);
@@ -490,7 +488,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 		{
 			case PGP_PKT_PUBLIC_KEY:
 			case PGP_PKT_SECRET_KEY:
-				if (encrypt)
+				if (want_encrypt)
 				{
 					if (got_main_key)
 					{
@@ -517,7 +515,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 				break;
 
 			case PGP_PKT_PUBLIC_SUBKEY:
-				if (encrypt)
+				if (want_encrypt)
 				{
 					if (pubtype != 0)
 						res = PXE_PGP_EXPECT_SECRET_KEY;
@@ -529,7 +527,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 				break;
 
 			case PGP_PKT_SECRET_SUBKEY:
-				if (encrypt)
+				if (want_encrypt)
 				{
 					if (pubtype != 1)
 						res = PXE_PGP_EXPECT_PUBLIC_KEY;
@@ -557,7 +555,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 
 		if (pk != NULL)
 		{
-			if (res >= 0 && encrypt && pk->can_encrypt)
+			if (res >= 0 && want_encrypt && pk->can_encrypt)
 			{
 				if (enc_key == NULL)
 				{
@@ -567,7 +565,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 				else
 					res = PXE_PGP_MULTIPLE_SUBKEYS;
 			}
-			else if (res >= 0 && !encrypt)
+			else if (res >= 0 && !want_encrypt)
 			{
 				if (sig_key == NULL)
 				{
@@ -599,7 +597,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 		return res;
 	}
 
-	if (encrypt)
+	if (want_encrypt)
 	{
 		if (!enc_key)
 			res = PXE_PGP_NO_USABLE_KEY;

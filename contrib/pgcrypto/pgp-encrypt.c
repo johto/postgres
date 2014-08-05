@@ -581,7 +581,9 @@ write_prefix(PGP_Context *ctx, PushFilter *dst)
 }
 
 /*
- * Initialize onepass signature state and write the packet.
+ * Initializes one-pass signature state and writes the one-pass signature
+ * packet.  The packet contains enough information for the reader to decrypt
+ * and verify the signature in a single pass over the encrypted data.
  */
 static int
 init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
@@ -802,7 +804,7 @@ pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst)
 		pf = pf_tmp;
 	}
 
-	/* TODO */
+    /* signature */
 	if (ctx->sig_key)
 	{
 		res = init_onepass_signature(&pf_tmp, ctx, pf);
