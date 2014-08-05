@@ -208,7 +208,7 @@ pgp_write_pubenc_sesskey(PGP_Context *ctx, PushFilter *dst)
 
 	if (pk == NULL)
 	{
-		px_debug("no pubkey?\n");
+		px_debug("pgp_write_pubenc_sesskey: no pubkey?\n");
 		return PXE_BUG;
 	}
 

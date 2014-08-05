@@ -814,8 +814,11 @@ parse_literal_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 
 	ctx->unicode_mode = (type == 'u') ? 1 : 0;
 
-	/* hashing context should have been set up for us */
-	if (ctx->sig_key && ctx->sig_digest_ctx == NULL)
+    /*
+     * If we're calculating a one-pass signature, a hashing context should have
+     * been set up for us.
+     */
+	if (ctx->sig_onepass && ctx->sig_digest_ctx == NULL)
 		return PXE_BUG;
 
 	/* read data */
@@ -944,7 +947,15 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 			pgp_sig_free(sig);
 			res = PXE_PGP_MULTIPLE_SIGNATURES;
 		}
-		else
+        /* check that this one matches the options in the one-pass signature */
+		else if (ctx->sig_onepass &&
+                (ctx->sig_onepass->algo != sig->algo ||
+                 ctx->sig_onepass->digest_algo != sig->digest_algo))
+        {
+            pgp_sig_free(sig);
+            res = PXE_PGP_CONFLICTING_SIGNATURES;
+        }
+        else
 			ctx->sig_expected = sig;
 	}
 	else
@@ -992,16 +1003,8 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 		switch (tag)
 		{
 			case PGP_PKT_LITERAL_DATA:
-				if (ctx->sig_key && !ctx->sig_onepass)
-				{
-					px_debug("no usable one-pass signatures found");
-					res = PXE_PGP_NO_USABLE_SIGNATURE;
-				}
-				else
-				{
-					got_data = 1;
-					res = parse_literal_data(ctx, dst, pkt);
-				}
+                got_data = 1;
+                res = parse_literal_data(ctx, dst, pkt);
 				break;
 			case PGP_PKT_COMPRESSED_DATA:
 				if (allow_compr == 0)

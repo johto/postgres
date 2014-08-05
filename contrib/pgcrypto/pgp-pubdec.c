@@ -161,7 +161,7 @@ pgp_parse_pubenc_sesskey(PGP_Context *ctx, PullFilter *pkt)
 	pk = ctx->pub_key;
 	if (pk == NULL)
 	{
-		px_debug("no pubkey?");
+		px_debug("pgp_parse_pubenc_sesskey: no pubkey?");
 		return PXE_BUG;
 	}
 

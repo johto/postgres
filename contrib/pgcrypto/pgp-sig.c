@@ -643,10 +643,9 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 	uint8 asn1_prefix[PGP_MAX_DIGEST_ASN1_PREFIX];
 	int prefix_len;
 
-
 	if (pk == NULL)
 	{
-		px_debug("no pubkey?");
+		px_debug("parse_signature_payload: no pubkey?");
 		return PXE_BUG;
 	}
 
@@ -777,23 +776,42 @@ err:
 
 
 int
-pgp_verify_signature(PGP_Context *ctx)
+pgp_verify_signature(PGP_Context *ctx, MBuf *data)
 {
 	int len;
+    uint8 *body;
 	uint8 *trailer;
 	uint8 digest[PGP_MAX_DIGEST];
-	PX_MD *md = ctx->sig_digest_ctx;
+	PX_MD *md;
 	PGP_Signature *sig = ctx->sig_expected;
 
-	/* TODO ? */
-	if (!ctx->sig_onepass || !ctx->sig_digest_ctx)
-		return PXE_PGP_NO_USABLE_SIGNATURE;
 	if (!sig)
-		return PXE_BUG;
+		return PXE_PGP_NO_SIGNATURE;
+
 	if (sig->version != 3 && sig->version != 4)
 		return PXE_BUG;
-	if (!sig->trailer)
-		return PXE_BUG;
+
+    md = ctx->sig_digest_ctx;
+    if (!md)
+    {
+        int res;
+
+        /*
+         * If no one-pass signature packet was found, we need to do a
+         * pass over the data to calculate its hash.  However, if
+         * convert-crlf was specified, the data we need to calculate the
+         * hash over is already gone and we should complain.
+         */
+
+        /* XXX: convert-crlf? */
+
+        res = pgp_load_digest(sig->digest_algo, &md);
+        if (res < 0)
+            return res;
+        ctx->sig_digest_ctx = md;
+        len = mbuf_grab(data, mbuf_avail(data), &body);
+        px_md_update(md, body, len);
+    }
 
 	len = mbuf_grab(sig->trailer, mbuf_avail(sig->trailer), &trailer);
 	px_md_update(md, trailer, len);

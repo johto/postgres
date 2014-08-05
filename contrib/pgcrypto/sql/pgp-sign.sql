@@ -20,26 +20,29 @@ select pgp_pub_signature_keys.* from
 select pgp_sym_decrypt_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key')
 from keytbl where keytbl.name = 'rsa2048';
 
+select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
 -- decrypt and verify the signature
 select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
 from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
 
 -- decrypt and verify the signature, wrong key
 select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(keytbl1.seckey)), 'key', dearmor(keytbl2.pubkey))
 from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
 
-
--- decrypt without verifying the signature, pub
-select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
-from keytbl where keytbl.name = 'rsaenc2048';
-
--- decrypt and verify the signature, pub
-select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
-from keytbl where keytbl.name = 'rsaenc2048';
-
--- decrypt and verify the signature, pub, wrong key
 select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(keytbl2.pubkey), dearmor(keytbl1.seckey)), dearmor(keytbl2.seckey), dearmor(keytbl2.pubkey))
 from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
+
+-- complain if no signature is present
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_bytea('Secret.', 'key'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_bytea('Secret.', dearmor(pubkey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
 
 -- multiple signers
 insert into encdata(id, data) values (5, '
@@ -96,6 +99,7 @@ select * from pgp_pub_decrypt_bytea((select dearmor(data) from encdata where id=
 select * from pgp_sym_signature_keys((select dearmor(data) from encdata where id=5), 'key');
 select * from pgp_pub_signature_keys((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'));
 
--- should match both signatures
+-- verify both signatures
 select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsa2048'));
 select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsaenc2048'));
+

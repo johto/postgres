@@ -348,7 +348,7 @@ int         pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
                                         PullFilter *pkt);
 int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
 								PullFilter *pkt, uint8 *expected_keyid);
-int			pgp_verify_signature(PGP_Context *ctx);
+int			pgp_verify_signature(PGP_Context *ctx, MBuf *data);
 
 
 int			pgp_mpi_alloc(int bits, PGP_MPI **mpi);
@@ -365,7 +365,6 @@ int pgp_elgamal_decrypt(PGP_PubKey *pk, PGP_MPI *c1, PGP_MPI *c2,
 					PGP_MPI **m);
 int			pgp_rsa_encrypt(PGP_PubKey *pk, PGP_MPI *m, PGP_MPI **c);
 int			pgp_rsa_decrypt(PGP_PubKey *pk, PGP_MPI *c, PGP_MPI **m);
-int         pgp_dsa_sign(PGP_PubKey *pk, PGP_MPI *m, PGP_MPI **c1, PGP_MPI **c2);
 
 extern struct PullFilterOps pgp_decrypt_filter;
 extern struct PullFilterOps pgp_prefix_filter;

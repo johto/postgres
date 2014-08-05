@@ -639,7 +639,7 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 
 	if (ctx->sig_key)
 	{
-		err = pgp_verify_signature(ctx);
+		err = pgp_verify_signature(ctx, dst);
 		if (err < 0)
 			goto out;
 	}

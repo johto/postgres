@@ -32,6 +32,13 @@ from keytbl where keytbl.name = 'rsa2048';
  Secret.
 (1 row)
 
+select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
+from keytbl where keytbl.name = 'rsaenc2048';
+ pgp_pub_decrypt_bytea 
+-----------------------
+ Secret.
+(1 row)
+
 -- decrypt and verify the signature
 select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
 from keytbl where keytbl.name = 'rsa2048';
@@ -40,19 +47,6 @@ from keytbl where keytbl.name = 'rsa2048';
  Secret.
 (1 row)
 
--- decrypt and verify the signature, wrong key
-select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(keytbl1.seckey)), 'key', dearmor(keytbl2.pubkey))
-from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
-ERROR:  No usable signature in the message
--- decrypt without verifying the signature, pub
-select pgp_pub_decrypt_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey))
-from keytbl where keytbl.name = 'rsaenc2048';
- pgp_pub_decrypt_bytea 
------------------------
- Secret.
-(1 row)
-
--- decrypt and verify the signature, pub
 select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
 from keytbl where keytbl.name = 'rsaenc2048';
  pgp_pub_decrypt_verify_bytea 
@@ -60,10 +54,20 @@ from keytbl where keytbl.name = 'rsaenc2048';
  Secret.
 (1 row)
 
--- decrypt and verify the signature, pub, wrong key
+-- decrypt and verify the signature, wrong key
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(keytbl1.seckey)), 'key', dearmor(keytbl2.pubkey))
+from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
+ERROR:  No signature matching the key id present in the message
 select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(keytbl2.pubkey), dearmor(keytbl1.seckey)), dearmor(keytbl2.seckey), dearmor(keytbl2.pubkey))
 from keytbl keytbl1, keytbl keytbl2 where keytbl1.name = 'rsa2048' and keytbl2.name = 'rsaenc2048';
-ERROR:  No usable signature in the message
+ERROR:  No signature matching the key id present in the message
+-- complain if no signature is present
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_bytea('Secret.', 'key'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+ERROR:  No signature matching the key id present in the message
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_bytea('Secret.', dearmor(pubkey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+ERROR:  No signature matching the key id present in the message
 -- multiple signers
 insert into encdata(id, data) values (5, '
 -----BEGIN PGP MESSAGE-----
@@ -133,7 +137,7 @@ select * from pgp_pub_signature_keys((select dearmor(data) from encdata where id
  9DCF8E9C9BD31F24 | sha1   | rsa
 (2 rows)
 
--- should match both signatures
+-- verify both signatures
 select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsa2048'));
  pgp_pub_decrypt_verify_bytea 
 ------------------------------
