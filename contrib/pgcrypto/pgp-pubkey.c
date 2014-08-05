@@ -609,7 +609,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 	else
 	{
 		if (!sig_key)
-			res = PXE_PGP_NO_USABLE_KEY;
+			res = PXE_PGP_NO_SIGN_KEY;
 		else
 			*pk_p = sig_key;
 	}
