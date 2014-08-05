@@ -49,17 +49,18 @@ read_pubkey_keyid(PullFilter *pkt, uint8 *keyid_buf)
 	if (res < 0)
 		goto err;
 
-	/* is it encryption key */
 	switch (pk->algo)
 	{
 		case PGP_PUB_ELG_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT_SIGN:
+        case PGP_PUB_RSA_SIGN:
+        case PGP_PUB_DSA_SIGN:
 			memcpy(keyid_buf, pk->key_id, 8);
 			res = 1;
 			break;
 		default:
-			res = 0;
+			res = PXE_PGP_UNSUPPORTED_PUBALGO;
 	}
 
 err:

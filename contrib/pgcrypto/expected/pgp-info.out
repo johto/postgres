@@ -80,19 +80,19 @@ from encdata order by id;
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=1;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 1C29BC0D18177364
 (1 row)
 
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=2;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 48E9CD56FEA668DB
 (1 row)
 
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=3;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 63F875F63F6774A0
 (1 row)
 
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=4;
@@ -104,7 +104,7 @@ select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=4;
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=5;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 1C29BC0D18177364
 (1 row)
 
 select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=6;
@@ -116,19 +116,19 @@ select pgp_main_key_id(dearmor(pubkey)) from keytbl where id=6;
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=1;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 1C29BC0D18177364
 (1 row)
 
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=2;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 48E9CD56FEA668DB
 (1 row)
 
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=3;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 63F875F63F6774A0
 (1 row)
 
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=4;
@@ -140,7 +140,7 @@ select pgp_main_key_id(dearmor(seckey)) from keytbl where id=4;
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=5;
  pgp_main_key_id  
 ------------------
- A0538BE0F17F0000
+ 1C29BC0D18177364
 (1 row)
 
 select pgp_main_key_id(dearmor(seckey)) from keytbl where id=6;
