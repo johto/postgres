@@ -56,17 +56,20 @@ static void hndl(const char *msg)
 PG_FUNCTION_INFO_V1(pgp_sym_encrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_sym_encrypt_text);
 PG_FUNCTION_INFO_V1(pgp_sym_encrypt_sign_bytea);
-//PG_FUNCTION_INFO_V1(pgp_sym_encrypt_sign_text);
+PG_FUNCTION_INFO_V1(pgp_sym_encrypt_sign_text);
 PG_FUNCTION_INFO_V1(pgp_sym_decrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_sym_decrypt_text);
 PG_FUNCTION_INFO_V1(pgp_sym_decrypt_verify_bytea);
+PG_FUNCTION_INFO_V1(pgp_sym_decrypt_verify_text);
 
 PG_FUNCTION_INFO_V1(pgp_pub_encrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_pub_encrypt_text);
 PG_FUNCTION_INFO_V1(pgp_pub_encrypt_sign_bytea);
+PG_FUNCTION_INFO_V1(pgp_pub_encrypt_sign_text);
 PG_FUNCTION_INFO_V1(pgp_pub_decrypt_bytea);
 PG_FUNCTION_INFO_V1(pgp_pub_decrypt_text);
 PG_FUNCTION_INFO_V1(pgp_pub_decrypt_verify_bytea);
+PG_FUNCTION_INFO_V1(pgp_pub_decrypt_verify_text);
 
 PG_FUNCTION_INFO_V1(pgp_key_id_w);
 PG_FUNCTION_INFO_V1(pgp_main_key_id_w);
@@ -909,6 +912,36 @@ pgp_sym_encrypt_sign_bytea(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(res);
 }
 
+Datum
+pgp_sym_encrypt_sign_text(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key,
+			   *sigkey;
+	text	   *psw = NULL,
+               *arg = NULL;
+	text	   *res;
+
+	data = PG_GETARG_BYTEA_P(0);
+	key = PG_GETARG_BYTEA_P(1);
+	sigkey = PG_GETARG_BYTEA_P(2);
+    if (PG_NARGS() > 3)
+        psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 4)
+		arg = PG_GETARG_BYTEA_P(4);
+
+	res = encrypt_internal(0, 1, data, key, sigkey, psw, arg);
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	PG_FREE_IF_COPY(sigkey, 2);
+    if (PG_NARGS() > 3)
+        PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 4)
+		PG_FREE_IF_COPY(arg, 4);
+	PG_RETURN_TEXT_P(res);
+}
+
 
 Datum
 pgp_sym_decrypt_bytea(PG_FUNCTION_ARGS)
@@ -984,39 +1017,39 @@ pgp_sym_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(res);
 }
 
-/*
- * Wrappers for public-key functions
- */
-
 Datum
-pgp_pub_encrypt_sign_bytea(PG_FUNCTION_ARGS)
+pgp_sym_decrypt_verify_text(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
-			   *sigkey;
+               *sigkey;
 	text	   *psw = NULL,
-			   *arg = NULL;
+               *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-	sigkey = PG_GETARG_BYTEA_P(2);
-	if (PG_NARGS() > 3)
-		psw = PG_GETARG_BYTEA_P(3);
+    sigkey = PG_GETARG_BYTEA_P(2);
+    if (PG_NARGS() > 3)
+        psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
-	res = encrypt_internal(1, 0, data, key, sigkey, psw, arg);
+	res = decrypt_internal(0, 1, data, key, sigkey, psw, arg);
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-	PG_FREE_IF_COPY(sigkey, 2);
-	if (PG_NARGS() > 3)
-		PG_FREE_IF_COPY(psw, 3);
+    PG_FREE_IF_COPY(sigkey, 2);
+    if (PG_NARGS() > 3)
+        PG_FREE_IF_COPY(arg, 3);
 	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
 }
+
+/*
+ * Wrappers for public-key functions
+ */
 
 Datum
 pgp_pub_encrypt_bytea(PG_FUNCTION_ARGS)
@@ -1063,7 +1096,7 @@ pgp_pub_encrypt_text(PG_FUNCTION_ARGS)
 }
 
 Datum
-pgp_pub_decrypt_verify_bytea(PG_FUNCTION_ARGS)
+pgp_pub_encrypt_sign_bytea(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
@@ -1080,7 +1113,37 @@ pgp_pub_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
-	res = decrypt_internal(1, 0, data, key, sigkey, psw, arg);
+	res = encrypt_internal(1, 0, data, key, sigkey, psw, arg);
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 4)
+		PG_FREE_IF_COPY(arg, 4);
+	PG_RETURN_TEXT_P(res);
+}
+
+Datum
+pgp_pub_encrypt_sign_text(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key,
+			   *sigkey;
+	text	   *psw = NULL,
+			   *arg = NULL;
+	text	   *res;
+
+	data = PG_GETARG_BYTEA_P(0);
+	key = PG_GETARG_BYTEA_P(1);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 4)
+		arg = PG_GETARG_BYTEA_P(4);
+
+	res = encrypt_internal(1, 1, data, key, sigkey, psw, arg);
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
@@ -1146,6 +1209,65 @@ pgp_pub_decrypt_text(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(res);
 }
 
+Datum
+pgp_pub_decrypt_verify_bytea(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key,
+			   *sigkey;
+	text	   *psw = NULL,
+			   *arg = NULL;
+	text	   *res;
+
+	data = PG_GETARG_BYTEA_P(0);
+	key = PG_GETARG_BYTEA_P(1);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 4)
+		arg = PG_GETARG_BYTEA_P(4);
+
+	res = decrypt_internal(1, 0, data, key, sigkey, psw, arg);
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 4)
+		PG_FREE_IF_COPY(arg, 4);
+	PG_RETURN_TEXT_P(res);
+}
+
+Datum
+pgp_pub_decrypt_verify_text(PG_FUNCTION_ARGS)
+{
+	bytea	   *data,
+			   *key,
+			   *sigkey;
+	text	   *psw = NULL,
+			   *arg = NULL;
+	text	   *res;
+
+	data = PG_GETARG_BYTEA_P(0);
+	key = PG_GETARG_BYTEA_P(1);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 4)
+		arg = PG_GETARG_BYTEA_P(4);
+
+	res = decrypt_internal(1, 1, data, key, sigkey, psw, arg);
+
+	PG_FREE_IF_COPY(data, 0);
+	PG_FREE_IF_COPY(key, 1);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 4)
+		PG_FREE_IF_COPY(arg, 4);
+	PG_RETURN_TEXT_P(res);
+}
 
 /*
  * Wrappers for PGP ascii armor

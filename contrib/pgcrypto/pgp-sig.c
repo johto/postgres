@@ -302,8 +302,14 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 		return PXE_BUG;
 	}
 
+
 	hdr[0] = ver;
-	hdr[1] = 0x00; /* TODO ? */
+
+    if (ctx->text_mode && ctx->convert_crlf)
+        hdr[1] = PGP_SIGTYP_TEXT;
+    else
+        hdr[1] = PGP_SIGTYP_BINARY;
+
 	hdr[2] = pk->algo;
 	hdr[3] = ctx->digest_algo;
 	res = pushf_write(dst, hdr, sizeof(hdr));

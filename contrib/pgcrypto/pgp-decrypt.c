@@ -887,8 +887,8 @@ parse_compressed_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 static int
 parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 {
-    PGP_Signature *sig;
 	int		res;
+    PGP_Signature *sig;
 
     /* don't bother if we weren't asked to verify signatures */
     if (!ctx->sig_key)
@@ -900,7 +900,8 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 
 	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
 		sig->algo == ctx->sig_key->algo &&
-        sig->type == 0x00 /* TODO */)
+	    (sig->type == PGP_SIGTYP_BINARY ||
+         sig->type == PGP_SIGTYP_TEXT))
 	{
         if (ctx->sig_onepass)
         {
@@ -929,8 +930,8 @@ parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 static int
 parse_signature(PGP_Context *ctx, PullFilter *pkt)
 {
-	PGP_Signature *sig;
 	int res;
+	PGP_Signature *sig;
 
     /* don't bother if we weren't asked to verify signatures */
 	if (!ctx->sig_key)
@@ -942,7 +943,8 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
 
 	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
 		sig->algo == ctx->sig_key->algo &&
-		sig->type == 0x00) /* TODO */
+	    (sig->type == PGP_SIGTYP_BINARY ||
+         sig->type == PGP_SIGTYP_TEXT))
 	{
 		if (ctx->sig_expected)
 			res = PXE_PGP_MULTIPLE_SIGNATURES;
@@ -1013,7 +1015,7 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 			case PGP_PKT_LITERAL_DATA:
                 if (ctx->sig_key && !ctx->sig_onepass && !ctx->sig_expected)
                 {
-                    px_debug("process_data_packets: no signature or one-pass"
+                    px_debug("process_data_packets: no signature or one-pass "
                              "signature before literal data");
                     res = PXE_PGP_NO_SIGNATURE;
                 }

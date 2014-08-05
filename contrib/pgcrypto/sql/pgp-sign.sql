@@ -133,3 +133,67 @@ select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata wh
 select pgp_main_key_id(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)))
 from keytbl where keytbl.name = 'rsa2048';
 
+-- text mode
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+-- encrypt in binary, verify signature in text (doesn't work)
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign_bytea('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+-- encrypt in text, verify signature in binary (works)
+
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign('Secret.', 'key', dearmor(seckey)), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign('Secret.', dearmor(pubkey), dearmor(seckey)), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+-- encrypt in text with convert-crlf, verify signature in binary (works)
+
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign('Secret.', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign('Secret.', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+select pgp_sym_decrypt_verify_bytea(pgp_sym_encrypt_sign(E'Secret.\n', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify_bytea(pgp_pub_encrypt_sign(E'Secret.\n', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+-- encrypt in text with convert-crlf, verify with same (works)
+
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign('Secret.', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey), '', 'convert-crlf=1')
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign('Secret.', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey), '', 'convert-crlf=1')
+from keytbl where keytbl.name = 'rsaenc2048';
+
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign(E'Secret.\n', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey), '', 'convert-crlf=1')
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign(E'Secret.\n', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey), '', 'convert-crlf=1')
+from keytbl where keytbl.name = 'rsaenc2048';
+
+-- encrypt in text with convert-crlf, verify in text without conversion (works)
+
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign('Secret.', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign('Secret.', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+
+select pgp_sym_decrypt_verify(pgp_sym_encrypt_sign(E'Secret.\n', 'key', dearmor(seckey), '', 'convert-crlf=1'), 'key', dearmor(pubkey))
+from keytbl where keytbl.name = 'rsa2048';
+
+select pgp_pub_decrypt_verify(pgp_pub_encrypt_sign(E'Secret.\n', dearmor(pubkey), dearmor(seckey), '', 'convert-crlf=1'), dearmor(seckey), dearmor(pubkey))
+from keytbl where keytbl.name = 'rsaenc2048';
+

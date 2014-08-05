@@ -162,9 +162,15 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 
 	while (1)
 	{
+        /*
+         * We don't need to care about the special handling for PKG_CONTEXT
+         * length in SYMENC_MDC packets because we skip over the data and never
+         * check the MDC.
+         */
 		res = pgp_parse_pkt_hdr(src, &tag, &len, 1);
 		if (res <= 0)
 			break;
+
 		res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
 		if (res < 0)
 			break;
