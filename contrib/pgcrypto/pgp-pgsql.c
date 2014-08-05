@@ -182,6 +182,7 @@ struct debug_expect
 	int			debug;
 	int			expect;
 	int			cipher_algo;
+	int			digest_algo;
 	int			s2k_mode;
 	int			s2k_cipher_algo;
 	int			s2k_digest_algo;
@@ -197,6 +198,7 @@ fill_expect(struct debug_expect * ex, int text_mode)
 	ex->debug = 0;
 	ex->expect = 0;
 	ex->cipher_algo = -1;
+	ex->digest_algo = -1;
 	ex->s2k_mode = -1;
 	ex->s2k_cipher_algo = -1;
 	ex->s2k_digest_algo = -1;
@@ -219,6 +221,7 @@ static void
 check_expect(PGP_Context *ctx, struct debug_expect * ex)
 {
 	EX_CHECK(cipher_algo);
+	EX_CHECK(digest_algo);
 	EX_CHECK(s2k_mode);
 	EX_CHECK(s2k_digest_algo);
 	EX_CHECK(use_sess_key);
@@ -273,9 +276,8 @@ set_arg(PGP_Context *ctx, char *key, char *val,
 	}
 	else if (ex != NULL && strcmp(key, "expect-digest-algo") == 0)
 	{
-		elog(ERROR, "XXX TODO ");
 		ex->expect = 1;
-		ex->cipher_algo = pgp_get_cipher_code(val);
+		ex->digest_algo = pgp_get_digest_code(val);
 	}
 	else if (ex != NULL && strcmp(key, "expect-disable-mdc") == 0)
 	{

@@ -503,7 +503,7 @@ again:
 			goto err;
 		else
 		{
-			/* read the first packet of the unhashed section */
+			/* start again from the first packet of the unhashed section */
 			goto again;
 		}
 	}
