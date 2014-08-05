@@ -94,6 +94,7 @@ uRScuAbB94gSEf/VmzTnilt2219be1w5zl35h1fjCbo=
 -----END PGP MESSAGE-----
 ');
 
+
 select * from pgp_pub_decrypt_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'));
 
 select * from pgp_sym_signature_keys((select dearmor(data) from encdata where id=5), 'key');
@@ -102,6 +103,31 @@ select * from pgp_pub_signature_keys((select dearmor(data) from encdata where id
 -- verify both signatures
 select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsa2048'));
 select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=6), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsaenc2048'));
+
+-- test v3 signature headers
+insert into encdata(id, data) values (7, '
+-----BEGIN PGP MESSAGE-----
+Version: GnuPG/MacGPG2 v2.0.19 (Darwin)
+Comment: GPGTools - http://gpgtools.org
+
+hQEMA/0CBsQJt0h1AQf/TbgfgQgH8QxP6THfNFKOW39TvV+v9Sb2p5Q7JRF6/YxG
+n2N2ADkO0S63wE9HRH2xHAbxvaxO9nCHX48mTTi6sj/6fRdg3nDn9yvQcE994JaS
+Wumn3d+7Pe8AqpwAyk6Tn2YSrdv8K3AKB0DuQI0FsXvjET8x7uBvD272c665od4k
+FhgOzJrgtin6DKCUSVc8UZgDw4ZI/TAHrbf6pxiIX2rLdn1EAcjuPALiQKGvQIyH
+I/B+Yq7j8sLhL60k3DEKHSjFqHR16LG4wsCKnNjzBM+Dto3nkklTcuy1Qu6D8B38
+b1yVWO6IoUPf1aKahrzdFfv3J9jnmt7CMbxIfjqeqdLAsAG2e+dtdDu/own6lI6T
+AM8TqvSCyKpjz8IN6FELe4rJq2LgS+FKJPcuFJV2JJs+eOo4O2PzVfdv8yJklysH
+epU5tfrpYdkbsrR9pLhsbKGDINDmqENydAhFLUII2xdichVkYvk+gye+GS3E2EPp
+aniMP/CuetL6qDIht9ADBCstBih8VFE7d7bNB//ldKc8cXKMJ/h1CHJ788sV2QBO
+RHgHdWFE02JoK8WsDf/Wg5422Yca1JXhfr3wvHUwAvmnnIGzOUBaHbMSTlrgqNsR
+nerdZxLfaxUQ8CjJ2yobn9OIAj4TAuITipssUsEVypT8m1lwsW2CaTuWUBcE9oC7
+ULIfPPt+McDf1EYNtp+0UxZASFLETVYsLIfhNQxf8YnXFuVcLzvhdVRQKZ7oMC17
++0non8pele5HURJO7e3ULQihtb1i9GPtPXRjhyuR5K3n35NoZJHt4SCQPuRxRJIB
+I4toPKPYCrND+X25oKaTrTMC
+=WWPD
+-----END PGP MESSAGE-----
+');
+select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata where id=7), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), (select dearmor(pubkey) from keytbl where keytbl.name = 'rsa2048'));
 
 -- pgp_main_key_id() should fail, even on signed data
 select pgp_main_key_id(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)))

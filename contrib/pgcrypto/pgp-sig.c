@@ -532,14 +532,48 @@ err:
 static int
 parse_v3_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
-	elog(ERROR, "TODO");
+    int res;
+    uint8 len;
+
+    /* one-octet length, must be 5 */
+    res = pullf_read_fixed(pkt, 1, &len);
+    if (res < 0)
+        return res;
+    if (len != 5)
+        return PXE_PGP_CORRUPT_DATA;
+
+	res = pullf_read_fixed(pkt, 1, &sig->type);
+	if (res < 0)
+        return res;
+    res = pullf_read_fixed(pkt, 4, sig->creation_time);
+    if (res < 0)
+        return res;
+    res = pullf_read_fixed(pkt, 8, sig->keyid);
+	if (res < 0)
+        return res;
+	res = pullf_read_fixed(pkt, 1, &sig->algo);
+	if (res < 0)
+        return res;
+	res = pullf_read_fixed(pkt, 1, &sig->digest_algo);
+    if (res < 0)
+        return res;
+
+	res = pullf_read_fixed(pkt, 2, sig->expected_digest_l16);
+
+    if (res >= 0)
+    {
+        /* write trailer */
+        mbuf_append(sig->trailer, &sig->type, 1);
+        mbuf_append(sig->trailer, sig->creation_time, 4);
+    }
+
+    return res;
 }
 
 static int
 parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
 	int res;
-	uint8 version;
 
 	struct SigSubPktParserState pstate;
 	bool found_creation_time = false;
@@ -547,11 +581,10 @@ parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 	PullFilter  *tr = NULL;
 
 	/*
-	 * In a V4 header, we need to store the everything up to the end of the
-	 * hashed subpackets for the hash trailer.
+     * In a V4 header, we need to store everything up to the end of the hashed
+     * subpackets for the hash trailer.
 	 */
-	version = 4;
-	mbuf_append(sig->trailer, &version, 1);
+	mbuf_append(sig->trailer, &sig->version, 1);
 	res = pullf_create_tee_reader(&tr, pkt, sig->trailer);
 	if (res < 0)
 		return res;
@@ -786,6 +819,8 @@ pgp_verify_signature(PGP_Context *ctx)
 
     if (!md)
         return PXE_BUG;
+    if (!sig)
+        return PXE_PGP_NO_SIGNATURE;
 	if (sig->version != 3 && sig->version != 4)
 		return PXE_BUG;
 
