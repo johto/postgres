@@ -814,11 +814,8 @@ parse_literal_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 
 	ctx->unicode_mode = (type == 'u') ? 1 : 0;
 
-    /*
-     * If we're calculating a one-pass signature, a hashing context should have
-     * been set up for us.
-     */
-	if (ctx->sig_onepass && ctx->sig_digest_ctx == NULL)
+    /* if verifying, a hashing context should have been set up for us */
+	if (ctx->sig_key && ctx->sig_digest_ctx == NULL)
 		return PXE_BUG;
 
 	/* read data */
