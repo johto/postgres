@@ -957,6 +957,7 @@ parse_signature(PGP_Context *ctx, PullFilter *pkt)
         }
         else
         {
+            /* if there was no one-pass signature, load sig_digest_ctx now */
             if (ctx->sig_digest_ctx)
                 res = PXE_BUG;
             else
