@@ -5365,7 +5365,15 @@ begin
   -- warning
   select 1 into mycols;
   -- warning
-  select 1, 2, 3 into myresult;
+  select 1, 2, 3 into mycols;
+  -- set operations; OK
+  select 1 into myresult union all select 2;
+  -- set operations; not OK
+  select 1,2 into myresult union all select 2,3;
+  -- values; OK
+  values (1), (2) into myresult;
+  -- values; not OK
+  values (1,2),(2,3) into myresult;
 end;
 $$ language plpgsql;
 WARNING:  the number of result expressions does not match that expected by the INTO target
@@ -5381,8 +5389,16 @@ LINE 21:   select 1 into mycols;
            ^
 DETAIL:  INTO target expects 2 expressions, but the query returns 1
 WARNING:  the number of result expressions does not match that expected by the INTO target
-LINE 23:   select 1, 2, 3 into myresult;
+LINE 23:   select 1, 2, 3 into mycols;
            ^
-DETAIL:  INTO target expects 1 expressions, but the query returns 3
+DETAIL:  INTO target expects 2 expressions, but the query returns 3
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 27:   select 1,2 into myresult union all select 2,3;
+           ^
+DETAIL:  INTO target expects 1 expressions, but the query returns 2
+WARNING:  the number of result expressions does not match that expected by the INTO target
+LINE 31:   values (1,2),(2,3) into myresult;
+           ^
+DETAIL:  INTO target expects 1 expressions, but the query returns 2
 drop table somecols;
 reset plpgsql.extra_warnings;

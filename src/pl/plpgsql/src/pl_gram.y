@@ -3494,7 +3494,7 @@ find_a_star_walker(Node *node, void *context)
 }
 
 /*
- * Find the number of columns in a raw statement's targetList (if SELECT) or
+ * Find the number of columns in a raw statement's target list (if SELECT) or
  * returningList (if INSERT, UPDATE or DELETE).  Returns -1 if the number of
  * columns could not be determined because of an A_Star.
  */
@@ -3504,7 +3504,15 @@ tlist_result_column_count(Node *stmt)
 	List *tlist;
 
 	if (IsA(stmt, SelectStmt))
-		tlist = ((SelectStmt *) stmt)->targetList;
+	{
+		SelectStmt *s = (SelectStmt *) stmt;
+		if (s->valuesLists)
+			tlist = (List *) linitial(s->valuesLists);
+		else if (s->op == SETOP_NONE)
+			tlist = s->targetList;
+		else
+			return tlist_result_column_count((Node *) s->larg);
+	}
 	else if (IsA(stmt, InsertStmt))
 		tlist = ((InsertStmt *) stmt)->returningList;
 	else if (IsA(stmt, UpdateStmt))

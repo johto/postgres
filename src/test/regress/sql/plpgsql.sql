@@ -4222,6 +4222,14 @@ begin
   select 1 into mycols;
   -- warning
   select 1, 2, 3 into mycols;
+  -- set operations; OK
+  select 1 into myresult union all select 2;
+  -- set operations; not OK
+  select 1,2 into myresult union all select 2,3;
+  -- values; OK
+  values (1), (2) into myresult;
+  -- values; not OK
+  values (1,2),(2,3) into myresult;
 end;
 $$ language plpgsql;
 
