@@ -302,8 +302,8 @@ int			pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
 						   int encrypt);
 
 int			pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst);
-int			gp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
-								  int (*cb)(void *opaque, PGP_Signature *sig, char *keyid));
+int			pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+								   int (*cb)(void *opaque, PGP_Signature *sig, char *keyid));
 
 /* internal functions */
 
