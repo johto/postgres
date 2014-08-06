@@ -3296,7 +3296,15 @@ tlist_result_column_count(Node *stmt)
 	List *tlist;
 
 	if (IsA(stmt, SelectStmt))
-		tlist = ((SelectStmt *) stmt)->targetList;
+    {
+        SelectStmt *s = (SelectStmt *) stmt;
+        if (s->valuesLists)
+            tlist = linitial(s->valuesLists);
+        else if (s->op != SETOP_NONE)
+            return tlist_result_column_count((Node *) s->larg);
+        else
+            tlist = s->targetList;
+    }
 	else if (IsA(stmt, InsertStmt))
 		tlist = ((InsertStmt *) stmt)->returningList;
 	else if (IsA(stmt, UpdateStmt))
