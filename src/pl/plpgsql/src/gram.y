@@ -22,6 +22,7 @@
 #include "parser/scanner.h"
 #include "parser/scansup.h"
 #include "utils/builtins.h"
+#include "nodes/nodefuncs.h"
 
 
 /* Location tracking support --- simpler than bison's default */
@@ -96,7 +97,7 @@ static	PLpgSQL_row		*make_scalar_list1(char *initial_name,
 										   PLpgSQL_datum *initial_datum,
 										   int lineno, int location);
 static	void			 check_sql_expr(const char *stmt, int location,
-										int leaderlen);
+										int leaderlen, PLpgSQL_row *check_row);
 static	void			 plpgsql_sql_error_callback(void *arg);
 static	PLpgSQL_type	*parse_datatype(const char *string, int location);
 static	void			 check_labels(const char *start_label,
@@ -106,6 +107,8 @@ static	PLpgSQL_expr 	*read_cursor_args(PLpgSQL_var *cursor,
 										  int until, const char *expected);
 static	List			*read_raise_options(void);
 static	void			check_raise_parameters(PLpgSQL_stmt_raise *stmt);
+static	bool			find_a_star_walker(Node *node, void *context);
+static	int				tlist_result_column_count(Node *stmt);
 
 %}
 
@@ -1284,7 +1287,7 @@ for_control		: for_variable K_IN
 								PLpgSQL_stmt_fori	*new;
 
 								/* Check first expression is well-formed */
-								check_sql_expr(expr1->query, expr1loc, 7);
+								check_sql_expr(expr1->query, expr1loc, 7, NULL);
 
 								/* Read and check the second one */
 								expr2 = read_sql_expression2(K_LOOP, K_BY,
@@ -1346,7 +1349,7 @@ for_control		: for_variable K_IN
 								pfree(expr1->query);
 								expr1->query = tmp_query;
 
-								check_sql_expr(expr1->query, expr1loc, 0);
+								check_sql_expr(expr1->query, expr1loc, 0, NULL);
 
 								new = palloc0(sizeof(PLpgSQL_stmt_fors));
 								new->cmd_type = PLPGSQL_STMT_FORS;
@@ -2409,7 +2412,7 @@ read_sql_construct(int until,
 	pfree(ds.data);
 
 	if (valid_sql)
-		check_sql_expr(expr->query, startlocation, strlen(sqlstart));
+		check_sql_expr(expr->query, startlocation, strlen(sqlstart), NULL);
 
 	return expr;
 }
@@ -2608,7 +2611,7 @@ make_execsql_stmt(int firsttoken, int location)
 	expr->ns            = plpgsql_ns_top();
 	pfree(ds.data);
 
-	check_sql_expr(expr->query, location, 0);
+	check_sql_expr(expr->query, location, 0, row);
 
 	execsql = palloc(sizeof(PLpgSQL_stmt_execsql));
 	execsql->cmd_type = PLPGSQL_STMT_EXECSQL;
@@ -3210,11 +3213,12 @@ make_scalar_list1(char *initial_name,
  * If no error cursor is provided, we'll just point at "location".
  */
 static void
-check_sql_expr(const char *stmt, int location, int leaderlen)
+check_sql_expr(const char *stmt, int location, int leaderlen, PLpgSQL_row *check_row)
 {
 	sql_error_callback_arg cbarg;
 	ErrorContextCallback  syntax_errcontext;
 	MemoryContext oldCxt;
+    List *raw_parsetree_list;
 
 	if (!plpgsql_check_syntax)
 		return;
@@ -3228,12 +3232,89 @@ check_sql_expr(const char *stmt, int location, int leaderlen)
 	error_context_stack = &syntax_errcontext;
 
 	oldCxt = MemoryContextSwitchTo(compile_tmp_cxt);
-	(void) raw_parser(stmt);
+	raw_parsetree_list = raw_parser(stmt);
+
+    if (check_row != NULL)
+    {
+        Node *raw_parse_tree;
+        int ncols;
+        int fnum;
+        int expected_ncols = 0;
+
+        for (fnum = 0; fnum < check_row->nfields; fnum++)
+        {
+            if (check_row->varnos[fnum] < 0)
+                continue;
+            expected_ncols++;
+        }
+
+        raw_parse_tree = linitial(raw_parsetree_list);
+        ncols = tlist_result_column_count(raw_parse_tree);
+        if (ncols >= 0 && ncols != expected_ncols)
+            ereport(WARNING,
+                    (errcode(ERRCODE_SYNTAX_ERROR),
+                     errmsg("the number of result expressions does not match that expected by the INTO target"),
+                     errdetail("INTO target expects %d expressions, but the query returns %d", expected_ncols, ncols)));
+    }
 	MemoryContextSwitchTo(oldCxt);
 
 	/* Restore former ereport callback */
 	error_context_stack = syntax_errcontext.previous;
 }
+
+/*
+ * Expression tree walker for tlist_result_column_count.  Returns true if the
+ * expression tree contains an A_Star node, false otherwise.
+ */
+static bool
+find_a_star_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, A_Star))
+		return true;
+	if (IsA(node, ColumnRef))
+	{
+		ColumnRef *ref = (ColumnRef *) node;
+		/* A_Star can only be the last element */
+		if (IsA(llast(ref->fields), A_Star))
+			return true;
+	}
+	return raw_expression_tree_walker((Node *) node,
+									  find_a_star_walker,
+									  context);
+}
+
+/*
+ * Find the number of columns in a raw statement's targetList (if SELECT) or
+ * returningList (if INSERT, UPDATE or DELETE).  Returns -1 if the number of
+ * columns could not be determined because of an A_Star.
+ */
+static int
+tlist_result_column_count(Node *stmt)
+{
+	List *tlist;
+
+	if (IsA(stmt, SelectStmt))
+		tlist = ((SelectStmt *) stmt)->targetList;
+	else if (IsA(stmt, InsertStmt))
+		tlist = ((InsertStmt *) stmt)->returningList;
+	else if (IsA(stmt, UpdateStmt))
+		tlist = ((UpdateStmt *) stmt)->returningList;
+	else if (IsA(stmt, DeleteStmt))
+		tlist = ((DeleteStmt *) stmt)->returningList;
+	else
+		elog(ERROR, "unknown nodeTag %d", nodeTag(stmt));
+
+	if (tlist == NIL)
+		return 0;
+
+	if (raw_expression_tree_walker((Node *) tlist, find_a_star_walker, NULL))
+		return -1;
+	return list_length(tlist);
+}
+
+
 
 static void
 plpgsql_sql_error_callback(void *arg)
