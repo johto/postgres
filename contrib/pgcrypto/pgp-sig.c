@@ -254,12 +254,11 @@ int
 pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 {
 	int			res;
-	PGP_PubKey  *pk = ctx->sig_key;
+	PGP_PubKey *pk = ctx->sig_key;
 	uint8		ver = 4;
-	uint8	   digest[PGP_MAX_DIGEST];
-	int		 digest_len;
-
-	uint8 hdr[SIGNATURE_PKT_HEADER_LENGTH];
+	uint8		digest[PGP_MAX_DIGEST];
+	int			digest_len;
+	uint8		hdr[SIGNATURE_PKT_HEADER_LENGTH];
 
 	if (pk == NULL)
 	{
@@ -272,7 +271,6 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 		return PXE_BUG;
 	}
 
-
 	hdr[0] = ver;
 
 	if (ctx->text_mode && ctx->convert_crlf)
@@ -284,12 +282,12 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 	hdr[3] = ctx->digest_algo;
 	res = pushf_write(dst, hdr, sizeof(hdr));
 	if (res < 0)
-		goto err;
+		return res;
 	px_md_update(ctx->sig_digest_ctx, hdr, sizeof(hdr));
 
 	res = write_signature_subpackets(ctx, ctx->sig_digest_ctx, dst);
 	if (res < 0)
-		goto err;
+		return res;
 
 	digest_v4_final_trailer(ctx->sig_digest_ctx,
 							SIGNATURE_PKT_HEADER_LENGTH + HASHED_SUBPKT_LENGTH);
@@ -300,7 +298,7 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 	/* write out the first two bytes of the digest */
 	res = pushf_write(dst, digest, 2);
 	if (res < 0)
-		goto err;
+		return res;
 
 	switch (pk->algo)
 	{
@@ -312,10 +310,6 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 			/* only RSA is currently supported */
 			res = PXE_PGP_UNKNOWN_PUBALGO;
 	}
-	if (res < 0)
-		goto err;
-
-err:
 
 	return res;
 }
