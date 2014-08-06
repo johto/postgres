@@ -535,14 +535,30 @@ gen_salt(type text [, iter_count integer ]) returns text
     <primary>pgp_sym_encrypt_bytea</primary>
    </indexterm>
 
+   <indexterm>
+    <primary>pgp_sym_encrypt_sign</primary>
+   </indexterm>
+
+   <indexterm>
+    <primary>pgp_sym_encrypt_sign_bytea</primary>
+   </indexterm>
+
 <synopsis>
 pgp_sym_encrypt(data text, psw text [, options text ]) returns bytea
 pgp_sym_encrypt_bytea(data bytea, psw text [, options text ]) returns bytea
+pgp_sym_encrypt_sign(data text, psw text [, options text ]) returns bytea
+pgp_sym_encrypt_sign_bytea(data bytea, psw text [, options text ]) returns bytea
 </synopsis>
    <para>
     Encrypt <parameter>data</> with a symmetric PGP key <parameter>psw</>.
     The <parameter>options</> parameter can contain option settings,
     as described below.
+   </para>
+   <para>
+    The <literal>sign</> versions also sign the encrypted data using the secret
+    key <parameter>sigkey</>.  If this key is password-protected, you must give
+    the password in <parameter>psw</>.  If there is no password, but you want
+    to specify options, you need to give an empty password.
    </para>
   </sect3>
 
@@ -557,9 +573,19 @@ pgp_sym_encrypt_bytea(data bytea, psw text [, options text ]) returns bytea
     <primary>pgp_sym_decrypt_bytea</primary>
    </indexterm>
 
+   <indexterm>
+    <primary>pgp_sym_decrypt_verify</primary>
+   </indexterm>
+
+   <indexterm>
+    <primary>pgp_sym_decrypt_verify_bytea</primary>
+   </indexterm>
+
 <synopsis>
 pgp_sym_decrypt(msg bytea, psw text [, options text ]) returns text
 pgp_sym_decrypt_bytea(msg bytea, psw text [, options text ]) returns bytea
+pgp_sym_decrypt_verify(msg bytea, psw text, sigkey bytea [, options text ]) returns text
+pgp_sym_decrypt_verify_bytea(msg bytea, psw text, sigkey bytea [, options text ]) returns bytea
 </synopsis>
    <para>
     Decrypt a symmetric-key-encrypted PGP message.
@@ -568,6 +594,13 @@ pgp_sym_decrypt_bytea(msg bytea, psw text [, options text ]) returns bytea
     Decrypting <type>bytea</> data with <function>pgp_sym_decrypt</> is disallowed.
     This is to avoid outputting invalid character data.  Decrypting
     originally textual data with <function>pgp_sym_decrypt_bytea</> is fine.
+   </para>
+   <para>
+    The <literal>verify</> versions also verify the signature against the
+    main public key provided in <parameter>sigkey</>.  An exception is raised
+    if no signature matching <parameter>sigkey's</> key ID is found or the
+    signature does not match.  If multiple signatures matching the key ID are
+    present in the message, an error is raised.
    </para>
    <para>
     The <parameter>options</> parameter can contain option settings,
@@ -586,13 +619,30 @@ pgp_sym_decrypt_bytea(msg bytea, psw text [, options text ]) returns bytea
     <primary>pgp_pub_encrypt_bytea</primary>
    </indexterm>
 
+   <indexterm>
+    <primary>pgp_pub_encrypt_sign</primary>
+   </indexterm>
+
+   <indexterm>
+    <primary>pgp_pub_encrypt_sign_bytea</primary>
+   </indexterm>
+
 <synopsis>
 pgp_pub_encrypt(data text, key bytea [, options text ]) returns bytea
 pgp_pub_encrypt_bytea(data bytea, key bytea [, options text ]) returns bytea
+pgp_pub_encrypt_sign(data text, key bytea, sigkey bytea [, psw text [, options text ]]) returns bytea
+pgp_pub_encrypt_sign_bytea(data bytea, key bytea, sigkey bytea [, psw text [, options text ]]) returns bytea
 </synopsis>
    <para>
     Encrypt <parameter>data</> with a public PGP key <parameter>key</>.
-    Giving this function a secret key will produce a error.
+    If a secret key is provided as the <parameter>key</> parameter, the
+    functions will produce an error.
+   </para>
+   <para>
+    The <literal>sign</> versions also sign the encrypted data using the secret
+    key <parameter>sigkey</>.  If this key is password-protected, you must give
+    the password in <parameter>psw</>.  If there is no password, but you want
+    to specify options, you need to give an empty password.
    </para>
    <para>
     The <parameter>options</> parameter can contain option settings,
@@ -611,9 +661,19 @@ pgp_pub_encrypt_bytea(data bytea, key bytea [, options text ]) returns bytea
     <primary>pgp_pub_decrypt_bytea</primary>
    </indexterm>
 
+   <indexterm>
+    <primary>pgp_pub_decrypt_verify</primary>
+   </indexterm>
+
+   <indexterm>
+    <primary>pgp_pub_decrypt_verify_bytea</primary>
+   </indexterm>
+
 <synopsis>
 pgp_pub_decrypt(msg bytea, key bytea [, psw text [, options text ]]) returns text
 pgp_pub_decrypt_bytea(msg bytea, key bytea [, psw text [, options text ]]) returns bytea
+pgp_pub_decrypt_verify(msg bytea, key bytea, sigkey bytea [, psw text [, options text ]]) returns text
+pgp_pub_decrypt_verify_bytea(msg bytea, key bytea, sigkey bytea [, psw text [, options text ]]) returns bytea
 </synopsis>
    <para>
     Decrypt a public-key-encrypted message.  <parameter>key</> must be the
@@ -621,6 +681,13 @@ pgp_pub_decrypt_bytea(msg bytea, key bytea [, psw text [, options text ]]) retur
     If the secret key is password-protected, you must give the password in
     <parameter>psw</>.  If there is no password, but you want to specify
     options, you need to give an empty password.
+   </para>
+   <para>
+    The <literal>verify</> versions also verify the signature against the
+    main public key provided in <parameter>sigkey</>.  An exception is raised
+    if no signature matching <parameter>sigkey's</> key ID is found or the
+    signature does not match.  If multiple signatures matching the key ID are
+    present in the message, an error is raised.
    </para>
    <para>
     Decrypting <type>bytea</> data with <function>pgp_pub_decrypt</> is disallowed.
@@ -678,6 +745,62 @@ pgp_key_id(bytea) returns text
     to see which fits &mdash; like handling <literal>ANYKEY</>.
    </para>
   </sect3>
+
+  <sect3>
+   <title><function>pgp_main_key_id()</function></title>
+
+   <indexterm>
+    <primary>pgp_main_key_id</primary>
+   </indexterm>
+
+<synopsis>
+pgp_main_key_id(bytea) returns text
+</synopsis>
+   <para>
+    <function>pgp_main_key_id</> extracts the key ID of the main key of a PGP
+    public or secret key.  Unlike <function>pgp_key_id</>, this function only
+    extracts key IDs from keys and not encrypted messages.  See
+    <function>pgp_sym_signature_keys</> and <function>pgp_pub_signature_keys</>
+    if you want to extract the keys used to sign encrypted data.
+   </para>
+  </sect3>
+
+  <sect3>
+   <title><function>pgp_sym_signature_keys()</function></title>
+
+   <indexterm>
+    <primary>pgp_sym_signature_keys</primary>
+   </indexterm>
+
+<synopsis>
+pgp_sym_signature_keys(data bytea, key text) returns setof (keyid text, digest text, pubkeyalgo text)
+</synopsis>
+   <para>
+    <function>pgp_sym_signature_keys</> extracts the list of signatures present
+    in the encrypted data in bytea.  The symmetric PGP key used to encrypt the
+    data should be provided in <parameter>key</>
+   </para>
+  </sect3>
+
+  <sect3>
+   <title><function>pgp_pub_signature_keys()</function></title>
+
+   <indexterm>
+    <primary>pgp_pub_signature_keys</primary>
+   </indexterm>
+
+<synopsis>
+pgp_pub_signature_keys(data bytea, key bytea [ , psw text]) returns setof (keyid text, digest text, pubkeyalgo text)
+</synopsis>
+   <para>
+    <function>pgp_pub_signature_keys</> extracts the list of signatures present
+    in the encrypted data in bytea.  The secret key corresponding to the public
+    key used to encrypt the data should be provided in <parameter>key</>.  If
+    key is password-protected, the password should be provided in
+    <parameter>psw</>.
+   </para>
+  </sect3>
+
 
   <sect3>
    <title><function>armor()</function>, <function>dearmor()</function></title>
@@ -782,6 +905,19 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 Values: 0, 1
 Default: 0
 Applies to: pgp_sym_encrypt, pgp_pub_encrypt, pgp_sym_decrypt, pgp_pub_decrypt
+</literallayout>
+  </sect4>
+
+  <sect4>
+   <title>digest-algo</title>
+
+   <para>
+    Which digest algorithm to use for generating signatures.
+   </para>
+<literallayout>
+Values: md5, sha1, sha256, sha384, sha512
+Default: sha512
+Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 </literallayout>
   </sect4>
 
@@ -929,14 +1065,9 @@ gpg -a --export-secret-keys KEYID > secret.key
   <itemizedlist>
    <listitem>
     <para>
-    No support for signing.  That also means that it is not checked
-    whether the encryption subkey belongs to the master key.
-    </para>
-   </listitem>
-   <listitem>
-    <para>
-    No support for encryption key as master key.  As such practice
-    is generally discouraged, this should not be a problem.
+    No support for master key as encryption key.  As such practice
+    is generally discouraged, this should not be a problem.  Similarly,
+    subkeys are not supported for signing.
     </para>
    </listitem>
    <listitem>
