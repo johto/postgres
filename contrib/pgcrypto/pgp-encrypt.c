@@ -37,6 +37,7 @@
 #include "px.h"
 #include "pgp.h"
 
+
 #define MDC_DIGEST_LEN 20
 #define STREAM_ID 0xE0
 #define STREAM_BLOCK_SHIFT	14
@@ -150,12 +151,12 @@ static const PushFilterOps mdc_filter = {
 static int
 sig_writer_flush(PushFilter *dst, void *priv)
 {
-	PGP_Context *ctx = priv;
-	int res;
-	int len;
-	MBuf *buf = NULL;
-	PushFilter *pf = NULL;
-	uint8 *data = NULL;
+	int				res;
+	int				len;
+	PGP_Context    *ctx = priv;
+	MBuf		   *buf = NULL;
+	PushFilter	   *pf = NULL;
+	uint8		   *data = NULL;
 
 	/*
 	 * Capture all the data into an mbuf so we don't have to worry about the
@@ -197,8 +198,8 @@ static const PushFilterOps sig_writer_filter = {
 static int
 sig_compute_init(PushFilter *dst, void *init_arg, void **priv_p)
 {
-	int			res;
-	PGP_Context *ctx = init_arg;
+	int				res;
+	PGP_Context	   *ctx = init_arg;
 
 	res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
 	if (res < 0)
@@ -211,7 +212,7 @@ sig_compute_init(PushFilter *dst, void *init_arg, void **priv_p)
 static int
 sig_compute_write(PushFilter *dst, void *priv, const uint8 *data, int len)
 {
-	PX_MD *md = priv;
+	PX_MD	   *md = priv;
 
 	px_md_update(md, data, len);
 	return pushf_write(dst, data, len);
@@ -237,7 +238,7 @@ static const PushFilterOps sig_compute_filter = {
 #define ENCBUF 8192
 struct EncStat
 {
-	PGP_CFB	*ciph;
+	PGP_CFB    *ciph;
 	uint8		buf[ENCBUF];
 };
 
@@ -246,7 +247,7 @@ encrypt_init(PushFilter *next, void *init_arg, void **priv_p)
 {
 	struct EncStat *st;
 	PGP_Context *ctx = init_arg;
-	PGP_CFB	*ciph;
+	PGP_CFB    *ciph;
 	int			resync = 1;
 	int			res;
 
@@ -588,10 +589,10 @@ write_prefix(PGP_Context *ctx, PushFilter *dst)
 static int
 init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
 {
-	int res;
-	uint8 hdr[4];
-	uint8 ver = 3;
-	uint8 last = 1;
+	int		res;
+	uint8	hdr[4];
+	uint8	ver = 3;
+	uint8	last = 1;
 
 	res = write_normal_header(dst, PGP_PKT_ONEPASS_SIGNATURE, 4 + 8 + 1);
 	if (res < 0)
@@ -599,10 +600,10 @@ init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
 
 	hdr[0] = ver;
 
-    if (ctx->text_mode && ctx->convert_crlf)
-        hdr[1] = PGP_SIGTYP_TEXT;
-    else
-        hdr[1] = PGP_SIGTYP_BINARY;
+	if (ctx->text_mode && ctx->convert_crlf)
+		hdr[1] = PGP_SIGTYP_TEXT;
+	else
+		hdr[1] = PGP_SIGTYP_BINARY;
 
 	hdr[2] = ctx->digest_algo;
 	hdr[3] = ctx->sig_key->algo;
@@ -613,7 +614,8 @@ init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
 	res = pushf_write(dst, ctx->sig_key->key_id, 8);
 	if (res < 0)
 		return res;
-	res = pushf_write(dst, &last, 1); /* no more one-pass signatures */
+	/* we only support one signature per message */
+	res = pushf_write(dst, &last, 1);
 	if (res < 0)
 		return res;
 	return pushf_create(pf_res, &sig_writer_filter, ctx, dst);
@@ -628,7 +630,7 @@ static int
 symencrypt_sesskey(PGP_Context *ctx, uint8 *dst)
 {
 	int			res;
-	PGP_CFB	*cfb;
+	PGP_CFB    *cfb;
 	uint8		algo = ctx->cipher_algo;
 
 	res = pgp_cfb_create(&cfb, ctx->s2k_cipher_algo,
@@ -804,7 +806,7 @@ pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst)
 		pf = pf_tmp;
 	}
 
-    /* signature */
+	/* one-pass signature signature */
 	if (ctx->sig_key)
 	{
 		res = init_onepass_signature(&pf_tmp, ctx, pf);

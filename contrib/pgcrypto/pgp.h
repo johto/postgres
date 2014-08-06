@@ -110,8 +110,8 @@ enum PGP_DIGEST_TYPE
 
 enum PGP_SIGNATURE_TYPE
 {
-    PGP_SIGTYP_BINARY = 0,
-    PGP_SIGTYP_TEXT = 1
+	PGP_SIGTYP_BINARY = 0,
+	PGP_SIGTYP_TEXT = 1
 };
 
 enum PGP_SIGNATURE_SUBPKT_TYPE
@@ -120,10 +120,10 @@ enum PGP_SIGNATURE_SUBPKT_TYPE
 	PGP_ISSUER_ID = 16
 };
 
-#define PGP_MAX_KEY                 (256/8)
-#define PGP_MAX_BLOCK               (256/8)
-#define PGP_MAX_DIGEST              (512/8)
-#define PGP_MAX_DIGEST_ASN1_PREFIX  20
+#define PGP_MAX_KEY					(256/8)
+#define PGP_MAX_BLOCK				(256/8)
+#define PGP_MAX_DIGEST				(512/8)
+#define PGP_MAX_DIGEST_ASN1_PREFIX	20
 #define PGP_S2K_SALT				8
 
 typedef struct PGP_MPI PGP_MPI;
@@ -250,18 +250,18 @@ struct PGP_PubKey
 
 struct PGP_Signature
 {
-    /* always present */
-    int     onepass;
-	uint8   keyid[8];
-	uint8   version;
-	uint8   type;
-	uint8   algo;
-	uint8   digest_algo;
+	/* always present */
+	int		onepass;
+	uint8	keyid[8];
+	uint8	version;
+	uint8	type;
+	uint8	algo;
+	uint8	digest_algo;
 
-    /* only present if this is not a one-pass signature */
-	uint8   creation_time[4];
-	uint8   expected_digest[PGP_MAX_DIGEST];
-	uint8   expected_digest_l16[2];
+	/* only present if this is not a one-pass signature */
+	uint8	creation_time[4];
+	uint8	expected_digest[PGP_MAX_DIGEST];
+	uint8	expected_digest_l16[2];
 	MBuf   *trailer;
 };
 
@@ -302,8 +302,8 @@ int			pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
 						   int encrypt);
 
 int			pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst);
-int         pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
-                                   int (*cb)(void *opaque, PGP_Signature *sig, char *keyid));
+int			gp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+								  int (*cb)(void *opaque, PGP_Signature *sig, char *keyid));
 
 /* internal functions */
 
@@ -350,8 +350,8 @@ int			pgp_write_pubenc_sesskey(PGP_Context *ctx, PushFilter *dst);
 int			pgp_create_pkt_writer(PushFilter *dst, int tag, PushFilter **res_p);
 
 int			pgp_write_signature(PGP_Context *ctx, PushFilter *dst);
-int         pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
-                                        PullFilter *pkt);
+int			pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
+										PullFilter *pkt);
 int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
 								PullFilter *pkt, uint8 *expected_keyid);
 int			pgp_verify_signature(PGP_Context *ctx);

@@ -97,8 +97,8 @@ static int
 decrypt_elgamal(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
-	PGP_MPI	*c1 = NULL;
-	PGP_MPI	*c2 = NULL;
+	PGP_MPI    *c1 = NULL;
+	PGP_MPI    *c2 = NULL;
 
 	if (pk->algo != PGP_PUB_ELG_ENCRYPT)
 		return PXE_PGP_WRONG_KEY;
@@ -124,7 +124,7 @@ static int
 decrypt_rsa(PGP_PubKey *pk, PullFilter *pkt, PGP_MPI **m_p)
 {
 	int			res;
-	PGP_MPI	*c;
+	PGP_MPI    *c;
 
 	if (pk->algo != PGP_PUB_RSA_ENCRYPT
 		&& pk->algo != PGP_PUB_RSA_ENCRYPT_SIGN)
@@ -156,7 +156,7 @@ pgp_parse_pubenc_sesskey(PGP_Context *ctx, PullFilter *pkt)
 	PGP_PubKey *pk;
 	uint8	   *msg;
 	int			msglen;
-	PGP_MPI	*m;
+	PGP_MPI    *m;
 
 	pk = ctx->pub_key;
 	if (pk == NULL)

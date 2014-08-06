@@ -54,8 +54,8 @@ read_pubkey_keyid(PullFilter *pkt, uint8 *keyid_buf)
 		case PGP_PUB_ELG_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT_SIGN:
-        case PGP_PUB_RSA_SIGN:
-        case PGP_PUB_DSA_SIGN:
+		case PGP_PUB_RSA_SIGN:
+		case PGP_PUB_DSA_SIGN:
 			memcpy(keyid_buf, pk->key_id, 8);
 			res = 1;
 			break;
@@ -112,42 +112,42 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 
 static int
 read_signature_keys_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
-                                         void *opaque, sig_key_cb_type sig_key_cb)
+										 void *opaque, sig_key_cb_type sig_key_cb)
 {
-    int res;
-    uint8 type;
-    PullFilter *pf_decompr;
+	int res;
+	uint8 type;
+	PullFilter *pf_decompr;
 
-    GETBYTE(pkt, type);
+	GETBYTE(pkt, type);
 
-    ctx->compress_algo = type;
-    switch (type)
-    {
-        case PGP_COMPR_NONE:
-            res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
-            break;
+	ctx->compress_algo = type;
+	switch (type)
+	{
+		case PGP_COMPR_NONE:
+			res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
+			break;
 
-        case PGP_COMPR_ZIP:
-        case PGP_COMPR_ZLIB:
-            res = pgp_decompress_filter(&pf_decompr, ctx, pkt);
-            if (res >= 0)
-            {
-                res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
-                pullf_free(pf_decompr);
-            }
-            break;
+		case PGP_COMPR_ZIP:
+		case PGP_COMPR_ZLIB:
+			res = pgp_decompress_filter(&pf_decompr, ctx, pkt);
+			if (res >= 0)
+			{
+				res = extract_signature_keys(ctx, pf_decompr, opaque, sig_key_cb, 0);
+				pullf_free(pf_decompr);
+			}
+			break;
 
-        case PGP_COMPR_BZIP2:
-            px_debug("read_signature_keys_from_compressed_data: bzip2 unsupported");
-            res = PXE_PGP_UNSUPPORTED_COMPR;
-            break;
+		case PGP_COMPR_BZIP2:
+			px_debug("read_signature_keys_from_compressed_data: bzip2 unsupported");
+			res = PXE_PGP_UNSUPPORTED_COMPR;
+			break;
 
-        default:
-            px_debug("read_signature_keys_from_compressed_data: unknown compr type");
-            res = PXE_PGP_CORRUPT_DATA;
-    }
+		default:
+			px_debug("read_signature_keys_from_compressed_data: unknown compr type");
+			res = PXE_PGP_CORRUPT_DATA;
+	}
 
-    return res;
+	return res;
 }
 
 static int
@@ -162,11 +162,11 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 
 	while (1)
 	{
-        /*
-         * We don't need to care about the special handling for PKG_CONTEXT
-         * length in SYMENC_MDC packets because we skip over the data and never
-         * check the MDC.
-         */
+		/*
+		 * We don't need to care about the special handling for PKG_CONTEXT
+		 * length in SYMENC_MDC packets because we skip over the data and never
+		 * check the MDC.
+		 */
 		res = pgp_parse_pkt_hdr(src, &tag, &len, 1);
 		if (res <= 0)
 			break;
@@ -183,14 +183,14 @@ extract_signature_keys(PGP_Context *ctx, PullFilter *src, void *opaque,
 					res = sig_key_cb(opaque, sig);
 				break;
 			case PGP_PKT_COMPRESSED_DATA:
-                if (!allow_compr)
-                {
-                    px_debug("extract_signature_keys: unexpected compression");
-                    res = PXE_PGP_CORRUPT_DATA;
-                }
-                else
-                    res = read_signature_keys_from_compressed_data(ctx, pkt, opaque, sig_key_cb);
-                break;
+				if (!allow_compr)
+				{
+					px_debug("extract_signature_keys: unexpected compression");
+					res = PXE_PGP_CORRUPT_DATA;
+				}
+				else
+					res = read_signature_keys_from_compressed_data(ctx, pkt, opaque, sig_key_cb);
+				break;
 			case PGP_PKT_ONEPASS_SIGNATURE:
 			case PGP_PKT_LITERAL_DATA:
 			case PGP_PKT_MDC:
@@ -277,7 +277,7 @@ out:
 
 static int
 get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
-                    void *opaque,
+					void *opaque,
 					int (*key_cb)(void *opaque, uint8 keyid[8]),
 					sig_key_cb_type sig_key_cb)
 {
@@ -313,26 +313,26 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
 			case PGP_PKT_SECRET_KEY:
 			case PGP_PKT_PUBLIC_KEY:
 				if (got_main_key)
-                    res = PXE_PGP_MULTIPLE_KEYS;
-                else
-                {
+					res = PXE_PGP_MULTIPLE_KEYS;
+				else
+				{
 					got_main_key = 1;
-                    if (want_main_key)
-                        res = read_pubkey_keyid(pkt, keyid_buf);
-                    else
-                        res = pgp_skip_packet(pkt);
-                }
+					if (want_main_key)
+						res = read_pubkey_keyid(pkt, keyid_buf);
+					else
+						res = pgp_skip_packet(pkt);
+				}
 				break;
 			case PGP_PKT_SECRET_SUBKEY:
 			case PGP_PKT_PUBLIC_SUBKEY:
-                if (want_main_key)
-                    res = pgp_skip_packet(pkt);
-                else
-                {
-                    res = read_pubkey_keyid(pkt, keyid_buf);
-                    if (res > 0)
-                        got_pub_key++;
-                }
+				if (want_main_key)
+					res = pgp_skip_packet(pkt);
+				else
+				{
+					res = read_pubkey_keyid(pkt, keyid_buf);
+					if (res > 0)
+						got_pub_key++;
+				}
 				break;
 			case PGP_PKT_SYMENCRYPTED_SESSKEY:
 				got_symenc_key++;
@@ -415,22 +415,22 @@ get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
 
 	if (key_cb)
 	{
-        if (want_main_key)
-        {
-            if (got_main_key)
-                res = key_cb(opaque, keyid_buf);
-            else
-                res = PXE_PGP_NO_SIGN_KEY;
-        }
-        else
-        {
-            if (got_pubenc_key || got_pub_key)
-                res = key_cb(opaque, keyid_buf);
-            else if (got_symenc_key)
-                res = key_cb(opaque, NULL);
-            else
-                res = PXE_PGP_NO_USABLE_KEY;
-        }
+		if (want_main_key)
+		{
+			if (got_main_key)
+				res = key_cb(opaque, keyid_buf);
+			else
+				res = PXE_PGP_NO_SIGN_KEY;
+		}
+		else
+		{
+			if (got_pubenc_key || got_pub_key)
+				res = key_cb(opaque, keyid_buf);
+			else if (got_symenc_key)
+				res = key_cb(opaque, NULL);
+			else
+				res = PXE_PGP_NO_USABLE_KEY;
+		}
 	}
 
 	return res;
@@ -468,30 +468,30 @@ pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst)
 
 struct GetSignatureKeyCtx
 {
-    int (*cb)(void *opaque, PGP_Signature *sig, char *keyid);
-    void *opaque;
+	int (*cb)(void *opaque, PGP_Signature *sig, char *keyid);
+	void *opaque;
 };
 
 static int
 get_signature_key_cb(void *opaque, PGP_Signature *sig)
 {
-    char keyid[17];
-    struct GetSignatureKeyCtx *ctx = opaque;
-    if (memcmp(sig->keyid, any_key, 8) == 0)
-        memcpy(keyid, "ANYKEY", 7);
-    else
-        print_key(sig->keyid, keyid);
-    return ctx->cb(ctx->opaque, sig, keyid);
+	char keyid[17];
+	struct GetSignatureKeyCtx *ctx = opaque;
+	if (memcmp(sig->keyid, any_key, 8) == 0)
+		memcpy(keyid, "ANYKEY", 7);
+	else
+		print_key(sig->keyid, keyid);
+	return ctx->cb(ctx->opaque, sig, keyid);
 }
 
 int
 pgp_get_signature_keys(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
-                       int (*cb)(void *opaque, PGP_Signature *sig, char *keyid))
+					   int (*cb)(void *opaque, PGP_Signature *sig, char *keyid))
 {
-    struct GetSignatureKeyCtx cbctx;
+	struct GetSignatureKeyCtx cbctx;
 
-    memset(&cbctx, 0, sizeof(cbctx));
-    cbctx.cb = cb;
-    cbctx.opaque = opaque;
+	memset(&cbctx, 0, sizeof(cbctx));
+	cbctx.cb = cb;
+	cbctx.opaque = opaque;
 	return get_key_information(ctx, pgp_data, 0, &cbctx, NULL, get_signature_key_cb);
 }

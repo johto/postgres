@@ -41,15 +41,6 @@
 #include "px.h"
 #include "pgp.h"
 
-static void hndl(const char *msg)
-{
-#ifdef __PGP_DBG_HANDLER
-	/* REMOVE ME */
-	elog(ERROR, "%s", msg);
-#endif
-}
-
-
 /*
  * public functions
  */
@@ -461,8 +452,6 @@ encrypt_internal(int is_pubenc, int is_text,
 	struct debug_expect ex;
 	text	   *tmp_data = NULL;
 
-	px_set_debug_handler(hndl);
-
 	/*
 	 * Add data and key info RNG.
 	 */
@@ -498,14 +487,14 @@ encrypt_internal(int is_pubenc, int is_text,
 							 NULL, 0, 0, 1);
 		mbuf_free(kbuf);
 		if (err < 0)
-			goto error;
+			goto out;
 	}
 	else
 	{
 		err = pgp_set_symkey(ctx, (uint8 *) VARDATA(key),
 							 VARSIZE(key) - VARHDRSZ);
 		if (err < 0)
-			goto error;
+			goto out;
 	}
 
 	if (sigkey)
@@ -523,7 +512,7 @@ encrypt_internal(int is_pubenc, int is_text,
 		err = pgp_set_sigkey(ctx, kbuf, psw, psw_len, 1, 0);
 		mbuf_free(kbuf);
 		if (err < 0)
-			goto error;
+			goto out;
 	}
 
 	/*
@@ -534,7 +523,7 @@ encrypt_internal(int is_pubenc, int is_text,
 	/*
 	 * check for error
 	 */
-error:
+out:
 	if (err)
 	{
 		if (ex.debug)
@@ -580,8 +569,6 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 	struct debug_expect ex;
 	int			got_unicode = 0;
 
-	px_set_debug_handler(hndl);
-
 
 	init_work(&ctx, need_text, args, &ex);
 
@@ -623,17 +610,17 @@ decrypt_internal(int is_pubenc, int need_text, text *data,
 			goto out;
 	}
 
-    if (sigkey)
-    {
+	if (sigkey)
+	{
 		MBuf	   *kbuf;
 
-        kbuf = create_mbuf_from_vardata(sigkey);
-        err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0, 0);
-        mbuf_free(kbuf);
+		kbuf = create_mbuf_from_vardata(sigkey);
+		err = pgp_set_sigkey(ctx, kbuf, NULL, 0, 0, 0);
+		mbuf_free(kbuf);
 
-        if (err < 0)
-            goto out;
-    }
+		if (err < 0)
+			goto out;
+	}
 
 
 	/*
@@ -701,54 +688,52 @@ out:
 
 struct MaterializeSignatureKeyCtx
 {
-    Tuplestorestate *tupstore;
-    TupleDesc tupdesc;
+	Tuplestorestate *tupstore;
+	TupleDesc tupdesc;
 };
 
 static int
 materialize_signature_key_cb(void *opaque, PGP_Signature *sig, char *keyid)
 {
-    struct MaterializeSignatureKeyCtx *ctx = opaque;
-    const char *digestalgo;
-    const char *pubkeyalgo;
-    Datum values[3];
-    bool isnull[3] = { false, false, false };
+	struct MaterializeSignatureKeyCtx *ctx = opaque;
+	const char *digestalgo;
+	const char *pubkeyalgo;
+	Datum		values[3];
+	bool		isnull[3] = { false, false, false };
 
-    digestalgo = pgp_get_digest_name(sig->digest_algo);
-    if (!digestalgo)
-        return PXE_PGP_UNSUPPORTED_HASH;
+	digestalgo = pgp_get_digest_name(sig->digest_algo);
+	if (!digestalgo)
+		return PXE_PGP_UNSUPPORTED_HASH;
 
-    switch (sig->algo)
-    {
-        case PGP_PUB_RSA_ENCRYPT_SIGN:
-        case PGP_PUB_RSA_SIGN:
-            pubkeyalgo = "rsa";
-            break;
-        case PGP_PUB_DSA_SIGN:
-            pubkeyalgo = "dsa";
-            break;
-        default:
-            return PXE_PGP_UNSUPPORTED_PUBALGO;
-    }
+	switch (sig->algo)
+	{
+		case PGP_PUB_RSA_ENCRYPT_SIGN:
+		case PGP_PUB_RSA_SIGN:
+			pubkeyalgo = "rsa";
+			break;
+		case PGP_PUB_DSA_SIGN:
+			pubkeyalgo = "dsa";
+			break;
+		default:
+			return PXE_PGP_UNSUPPORTED_PUBALGO;
+	}
 
-    values[0] = CStringGetTextDatum(keyid);
-    values[1] = CStringGetTextDatum(digestalgo);
-    values[2] = CStringGetTextDatum(pubkeyalgo);
-    tuplestore_putvalues(ctx->tupstore, ctx->tupdesc, values, isnull);
-    return 0;
+	values[0] = CStringGetTextDatum(keyid);
+	values[1] = CStringGetTextDatum(digestalgo);
+	values[2] = CStringGetTextDatum(pubkeyalgo);
+	tuplestore_putvalues(ctx->tupstore, ctx->tupdesc, values, isnull);
+	return 0;
 }
 
 static int
 materialize_signature_keys(int is_pubenc, text *data, text *key, text *keypsw,
-                           Tuplestorestate *tupstore, TupleDesc tupdesc)
+						   Tuplestorestate *tupstore, TupleDesc tupdesc)
 {
 	PGP_Context	   *ctx = NULL;
 	MBuf		   *src = NULL;
 	int				err;
 	struct debug_expect ex;
-    struct MaterializeSignatureKeyCtx cbctx;
-
-	px_set_debug_handler(hndl);
+	struct MaterializeSignatureKeyCtx cbctx;
 
 	init_work(&ctx, 0, NULL, &ex);
 	if (is_pubenc)
@@ -768,9 +753,9 @@ materialize_signature_keys(int is_pubenc, text *data, text *key, text *keypsw,
 			goto out;
 	}
 
-    memset(&cbctx, 0, sizeof(cbctx));
-    cbctx.tupstore = tupstore;
-    cbctx.tupdesc = tupdesc;
+	memset(&cbctx, 0, sizeof(cbctx));
+	cbctx.tupstore = tupstore;
+	cbctx.tupdesc = tupdesc;
 
 	src = create_mbuf_from_vardata(data);
 	err = pgp_get_signature_keys(ctx, src, &cbctx, materialize_signature_key_cb);
@@ -782,7 +767,8 @@ out:
 		pgp_free(ctx);
 	if (err < 0)
 	{
-		px_set_debug_handler(NULL);
+		if (ex.debug)
+			px_set_debug_handler(NULL);
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION),
 				 errmsg("%s", px_strerror(err))));
@@ -792,18 +778,18 @@ out:
 
 static int
 signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw,
-                        ReturnSetInfo *rsinfo)
+						ReturnSetInfo *rsinfo)
 {
-    MemoryContext oldcxt;
-    Tuplestorestate *tupstore;
-    TupleDesc tupdesc;
-    int res;
+	MemoryContext	oldcxt;
+	int				res;
+	Tuplestorestate *tupstore;
+	TupleDesc		tupdesc;
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context that cannot accept a set")));
+				errmsg("set-valued function called in context that cannot accept a set")));
 	if (!(rsinfo->allowedModes & SFRM_Materialize))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -822,18 +808,18 @@ signature_keys_internal(int is_pubenc, text *data, text *key, text *keypsw,
 		tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random,
 							  false, work_mem);
 
-    res = materialize_signature_keys(is_pubenc, data, key, keypsw, tupstore, tupdesc);
-    if (res < 0)
-        return PXE_BUG;
+	res = materialize_signature_keys(is_pubenc, data, key, keypsw, tupstore, tupdesc);
+	if (res < 0)
+		return PXE_BUG;
 
-    MemoryContextSwitchTo(oldcxt);
+	MemoryContextSwitchTo(oldcxt);
 
-    rsinfo->returnMode = SFRM_Materialize;
-    rsinfo->setResult = tupstore;
-    rsinfo->setDesc = tupdesc;
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
 
-    return 0;
-}
+	return 0;
+	}
 
 /*
  * Wrappers for symmetric-key functions
@@ -889,14 +875,14 @@ pgp_sym_encrypt_sign_bytea(PG_FUNCTION_ARGS)
 			   *key,
 			   *sigkey;
 	text	   *psw = NULL,
-               *arg = NULL;
+			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
 	sigkey = PG_GETARG_BYTEA_P(2);
-    if (PG_NARGS() > 3)
-        psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
@@ -905,8 +891,8 @@ pgp_sym_encrypt_sign_bytea(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
 	PG_FREE_IF_COPY(sigkey, 2);
-    if (PG_NARGS() > 3)
-        PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(psw, 3);
 	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
@@ -919,14 +905,14 @@ pgp_sym_encrypt_sign_text(PG_FUNCTION_ARGS)
 			   *key,
 			   *sigkey;
 	text	   *psw = NULL,
-               *arg = NULL;
+			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
 	sigkey = PG_GETARG_BYTEA_P(2);
-    if (PG_NARGS() > 3)
-        psw = PG_GETARG_BYTEA_P(3);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
@@ -935,8 +921,8 @@ pgp_sym_encrypt_sign_text(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
 	PG_FREE_IF_COPY(sigkey, 2);
-    if (PG_NARGS() > 3)
-        PG_FREE_IF_COPY(psw, 3);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(psw, 3);
 	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
@@ -992,16 +978,16 @@ pgp_sym_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
-               *sigkey;
+			   *sigkey;
 	text	   *psw = NULL,
-               *arg = NULL;
+			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-    sigkey = PG_GETARG_BYTEA_P(2);
-    if (PG_NARGS() > 3)
-        psw = PG_GETARG_BYTEA_P(3);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
@@ -1009,9 +995,9 @@ pgp_sym_decrypt_verify_bytea(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-    PG_FREE_IF_COPY(sigkey, 2);
-    if (PG_NARGS() > 3)
-        PG_FREE_IF_COPY(arg, 3);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(arg, 3);
 	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
@@ -1022,16 +1008,16 @@ pgp_sym_decrypt_verify_text(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key,
-               *sigkey;
+			   *sigkey;
 	text	   *psw = NULL,
-               *arg = NULL;
+			   *arg = NULL;
 	text	   *res;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-    sigkey = PG_GETARG_BYTEA_P(2);
-    if (PG_NARGS() > 3)
-        psw = PG_GETARG_BYTEA_P(3);
+	sigkey = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 3)
+		psw = PG_GETARG_BYTEA_P(3);
 	if (PG_NARGS() > 4)
 		arg = PG_GETARG_BYTEA_P(4);
 
@@ -1039,9 +1025,9 @@ pgp_sym_decrypt_verify_text(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-    PG_FREE_IF_COPY(sigkey, 2);
-    if (PG_NARGS() > 3)
-        PG_FREE_IF_COPY(arg, 3);
+	PG_FREE_IF_COPY(sigkey, 2);
+	if (PG_NARGS() > 3)
+		PG_FREE_IF_COPY(arg, 3);
 	if (PG_NARGS() > 4)
 		PG_FREE_IF_COPY(arg, 4);
 	PG_RETURN_TEXT_P(res);
@@ -1395,7 +1381,7 @@ pgp_sym_signature_keys_w(PG_FUNCTION_ARGS)
 	psw = PG_GETARG_TEXT_P(1);
 
 	err = signature_keys_internal(0, data, psw, NULL,
-                                  (ReturnSetInfo *) fcinfo->resultinfo);
+								  (ReturnSetInfo *) fcinfo->resultinfo);
 
 	if (err < 0)
 		ereport(ERROR,
@@ -1404,7 +1390,7 @@ pgp_sym_signature_keys_w(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(psw, 1);
-    return (Datum) 0;
+	return (Datum) 0;
 }
 
 Datum
@@ -1412,16 +1398,16 @@ pgp_pub_signature_keys_w(PG_FUNCTION_ARGS)
 {
 	bytea	   *data,
 			   *key;
-    text       *keypsw = NULL;
+	text	   *keypsw = NULL;
 	int err;
 
 	data = PG_GETARG_BYTEA_P(0);
 	key = PG_GETARG_BYTEA_P(1);
-    if (PG_NARGS() > 2)
-        keypsw = PG_GETARG_BYTEA_P(2);
+	if (PG_NARGS() > 2)
+		keypsw = PG_GETARG_BYTEA_P(2);
 
 	err = signature_keys_internal(1, data, key, keypsw,
-                                  (ReturnSetInfo *) fcinfo->resultinfo);
+								  (ReturnSetInfo *) fcinfo->resultinfo);
 
 	if (err < 0)
 		ereport(ERROR,
@@ -1430,8 +1416,8 @@ pgp_pub_signature_keys_w(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
-    if (PG_NARGS() > 2)
-        PG_FREE_IF_COPY(keypsw, 2);
+	if (PG_NARGS() > 2)
+		PG_FREE_IF_COPY(keypsw, 2);
 
-    return (Datum) 0;
+	return (Datum) 0;
 }

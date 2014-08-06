@@ -38,7 +38,7 @@
  * Defaults.
  */
 static int	def_cipher_algo = PGP_SYM_AES_128;
-static int  def_digest_algo = PGP_DIGEST_SHA512;
+static int	def_digest_algo = PGP_DIGEST_SHA512;
 static int	def_s2k_cipher_algo = -1;
 static int	def_s2k_mode = PGP_S2K_ISALTED;
 static int	def_s2k_digest_algo = PGP_DIGEST_SHA1;
@@ -76,7 +76,6 @@ static const struct digest_info digest_list[] = {
 	{"sha512", PGP_DIGEST_SHA512},
 	{NULL, 0}
 };
-
 
 static const struct cipher_info cipher_list[] = {
 	{"3des", PGP_SYM_DES3, "3des-ecb", 192 / 8, 64 / 8},
@@ -148,59 +147,59 @@ pgp_get_cipher_name(int code)
 int
 pgp_get_digest_asn1_prefix(int code, uint8 *data)
 {
-    int len;
+	int len;
 
-    uint8 md5_prefix[18] =
-        {0x30, 0x20, 0x30, 0x0C, 0x06, 0x08, 0x2A, 0x86,
-         0x48, 0x86, 0xF7, 0x0D, 0x02, 0x05, 0x05, 0x00,
-         0x04, 0x10};
-    uint8 ripemd160_prefix[15] =
-        {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2B, 0x24,
-         0x03, 0x02, 0x01, 0x05, 0x00, 0x04, 0x14};
-    uint8 sha1_prefix[15] =
-        {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0E,
-         0x03, 0x02, 0x1A, 0x05, 0x00, 0x04, 0x14};
-    uint8 sha256_prefix[19] =
-        {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
-         0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
-         0x00, 0x04, 0x20};
-    uint8 sha384_prefix[19] =
-        {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
-         0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05,
-         0x00, 0x04, 0x30};
-    uint8 sha512_prefix[19] =
-        {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
-         0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05,
-         0x00, 0x04, 0x40};
+	uint8 md5_prefix[18] =
+		{0x30, 0x20, 0x30, 0x0C, 0x06, 0x08, 0x2A, 0x86,
+		 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x05, 0x05, 0x00,
+		 0x04, 0x10};
+	uint8 ripemd160_prefix[15] =
+		{0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2B, 0x24,
+		 0x03, 0x02, 0x01, 0x05, 0x00, 0x04, 0x14};
+	uint8 sha1_prefix[15] =
+		{0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0E,
+		 0x03, 0x02, 0x1A, 0x05, 0x00, 0x04, 0x14};
+	uint8 sha256_prefix[19] =
+		{0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
+		 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
+		 0x00, 0x04, 0x20};
+	uint8 sha384_prefix[19] =
+		{0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
+		 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05,
+		 0x00, 0x04, 0x30};
+	uint8 sha512_prefix[19] =
+		{0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
+		 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05,
+		 0x00, 0x04, 0x40};
 
-    switch (code)
-    {
-        case PGP_DIGEST_MD5:
-            len = sizeof(md5_prefix);
-            memcpy(data, md5_prefix, len);
-            return len;
-        case PGP_DIGEST_RIPEMD160:
-            len = sizeof(ripemd160_prefix);
-            memcpy(data, ripemd160_prefix, len);
-            return len;
-        case PGP_DIGEST_SHA1:
-            len = sizeof(sha1_prefix);
-            memcpy(data, sha1_prefix, len);
-            return len;
-        case PGP_DIGEST_SHA256:
-            len = sizeof(sha256_prefix);
-            memcpy(data, sha256_prefix, len);
-            return len;
-        case PGP_DIGEST_SHA384:
-            len = sizeof(sha384_prefix);
-            memcpy(data, sha384_prefix, len);
-            return len;
-        case PGP_DIGEST_SHA512:
-            len = sizeof(sha512_prefix);
-            memcpy(data, sha512_prefix, len);
-            return len;
-    }
-    return PXE_PGP_UNSUPPORTED_HASH;
+	switch (code)
+	{
+		case PGP_DIGEST_MD5:
+			len = sizeof(md5_prefix);
+			memcpy(data, md5_prefix, len);
+			return len;
+		case PGP_DIGEST_RIPEMD160:
+			len = sizeof(ripemd160_prefix);
+			memcpy(data, ripemd160_prefix, len);
+			return len;
+		case PGP_DIGEST_SHA1:
+			len = sizeof(sha1_prefix);
+			memcpy(data, sha1_prefix, len);
+			return len;
+		case PGP_DIGEST_SHA256:
+			len = sizeof(sha256_prefix);
+			memcpy(data, sha256_prefix, len);
+			return len;
+		case PGP_DIGEST_SHA384:
+			len = sizeof(sha384_prefix);
+			memcpy(data, sha384_prefix, len);
+			return len;
+		case PGP_DIGEST_SHA512:
+			len = sizeof(sha512_prefix);
+			memcpy(data, sha512_prefix, len);
+			return len;
+	}
+	return PXE_PGP_UNSUPPORTED_HASH;
 }
 
 int
@@ -264,7 +263,7 @@ pgp_init(PGP_Context **ctx_p)
 	memset(ctx, 0, sizeof *ctx);
 
 	ctx->cipher_algo = def_cipher_algo;
-    ctx->digest_algo = def_digest_algo;
+	ctx->digest_algo = def_digest_algo;
 	ctx->s2k_cipher_algo = def_s2k_cipher_algo;
 	ctx->s2k_mode = def_s2k_mode;
 	ctx->s2k_digest_algo = def_s2k_digest_algo;

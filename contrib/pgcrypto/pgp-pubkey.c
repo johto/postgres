@@ -469,12 +469,12 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 	PGP_PubKey *pk = NULL;
 	int			got_main_key = 0;
 
-    /*
-     * Find the key to use for encryption, decryption, signing or verifying
-     * from src, and place it into *pk_p.  An error is returned if the input
-     * has multiple main keys or if asked for an encryption key and there are
-     * multiple subkeys capable of encryption.
-     */
+	/*
+	 * Find the key to use for encryption, decryption, signing or verifying
+	 * from src, and place it into *pk_p.  An error is returned if the input
+	 * has multiple main keys or if asked for an encryption key and there are
+	 * multiple subkeys capable of encryption.
+	 */
 	while (1)
 	{
 		res = pgp_parse_pkt_hdr(src, &tag, &len, 0);
@@ -616,7 +616,7 @@ internal_read_key(PullFilter *src, PGP_PubKey **pk_p,
 
 static int
 set_key(MBuf *keypkt, const uint8 *key, int key_len,
-        int pubtype, int encrypt, PGP_PubKey **pk_p)
+		int pubtype, int encrypt, PGP_PubKey **pk_p)
 {
 	int			res;
 	PullFilter *src;
@@ -629,12 +629,12 @@ set_key(MBuf *keypkt, const uint8 *key, int key_len,
 	res = internal_read_key(src, &pk, key, key_len, pubtype, encrypt);
 	pullf_free(src);
 
-    if (res >= 0)
-    {
-        *pk_p = pk;
-        return 0;
-    }
-    return res;
+	if (res >= 0)
+	{
+		*pk_p = pk;
+		return 0;
+	}
+	return res;
 }
 
 int
@@ -642,16 +642,16 @@ pgp_set_sigkey(PGP_Context *ctx, MBuf *keypkt,
 			   const uint8 *key, int key_len, int pubtype,
 			   int encrypt)
 {
-    int res;
+	int res;
 
-    res = set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->sig_key);
-    if (res < 0)
-        return res;
-    if (ctx->sig_key->algo != PGP_PUB_RSA_ENCRYPT_SIGN &&
+	res = set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->sig_key);
+	if (res < 0)
+		return res;
+	if (ctx->sig_key->algo != PGP_PUB_RSA_ENCRYPT_SIGN &&
 		ctx->sig_key->algo != PGP_PUB_RSA_SIGN &&
 		ctx->sig_key->algo != PGP_PUB_DSA_SIGN)
-        return PXE_PGP_UNSUPPORTED_PUBALGO;
-    return 0;
+		return PXE_PGP_UNSUPPORTED_PUBALGO;
+	return 0;
 }
 
 int
@@ -659,5 +659,5 @@ pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
 			   const uint8 *key, int key_len, int pubtype,
 			   int encrypt)
 {
-    return set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->pub_key);
+	return set_key(keypkt, key, key_len, pubtype, encrypt, &ctx->pub_key);
 }

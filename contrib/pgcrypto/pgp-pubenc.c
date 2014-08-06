@@ -34,10 +34,8 @@
 #include "px.h"
 #include "pgp.h"
 
-
 #define HASHED_SUBPKT_LENGTH		8
 #define SIGNATURE_PKT_HEADER_LENGTH 4
-
 
 /*
  * padded msg: 02 || non-zero pad bytes || 00 || msg
@@ -97,9 +95,9 @@ create_secmsg(PGP_Context *ctx, PGP_MPI **msg_p, int full_bytes)
 	int			res,
 				i;
 	unsigned	cksum = 0;
-	int		 klen = ctx->sess_key_len;
+	int			klen = ctx->sess_key_len;
 	uint8	   *padded = NULL;
-	PGP_MPI	*m = NULL;
+	PGP_MPI    *m = NULL;
 
 	/* calc checksum */
 	for (i = 0; i < klen; i++)
@@ -144,7 +142,7 @@ static int
 encrypt_and_write_elgamal(PGP_Context *ctx, PGP_PubKey *pk, PushFilter *pkt)
 {
 	int			res;
-	PGP_MPI	*m = NULL,
+	PGP_MPI    *m = NULL,
 			   *c1 = NULL,
 			   *c2 = NULL;
 
@@ -175,7 +173,7 @@ static int
 encrypt_and_write_rsa(PGP_Context *ctx, PGP_PubKey *pk, PushFilter *pkt)
 {
 	int			res;
-	PGP_MPI	*m = NULL,
+	PGP_MPI    *m = NULL,
 			   *c = NULL;
 
 	/* create padded msg */

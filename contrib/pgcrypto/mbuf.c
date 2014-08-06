@@ -340,9 +340,9 @@ pullf_read_fixed(PullFilter *src, int len, uint8 *dst)
 int
 pullf_discard(PullFilter *src, int max)
 {
-	int res;
-	uint8 *tmp;
-	int read = 0;
+	int		res;
+	uint8  *tmp;
+	int		read = 0;
 
 	if (max == -1)
 	{
@@ -403,8 +403,8 @@ static int
 limited_reader_pull(void *arg, PullFilter *src, int len,
 					uint8 **data_p, uint8 *buf, int buflen)
 {
-	int *limit = arg;
-	int res;
+	int    *limit = arg;
+	int		res;
 
 	if (*limit == 0)
 		return 0;
@@ -426,6 +426,14 @@ static const struct PullFilterOps limited_reader = {
 	NULL, limited_reader_pull, NULL
 };
 
+/*
+ * Creates a new PullFilter which reads *limit bytes from src.  The caller
+ * should make sure the memory limit points to stays alive until the reader is
+ * destroyed.  The value of *limit is updated after every read.  While reading,
+ * if an EOF is encountered before consuming *limit bytes from src or the
+ * caller tries to read more than *limit bytes in total, PXE_MBUF_SHORT_READ is
+ * returned.
+ */
 int
 pullf_create_limited_reader(PullFilter **mp_p, PullFilter *src, int *limit)
 {
@@ -439,9 +447,9 @@ static int
 tee_reader_pull(void *arg, PullFilter *src, int len,
 				uint8 **data_p, uint8 *buf, int buflen)
 {
-	MBuf	   *mbuf = arg;
-	int res;
-	int res2;
+	MBuf   *mbuf = arg;
+	int		res;
+	int		res2;
 
 	res = pullf_read(src, len, data_p);
 	if (res <= 0)

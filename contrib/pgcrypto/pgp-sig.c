@@ -106,11 +106,8 @@ create_signature_vessel(PGP_Context *ctx, uint8 *data, int klen, PGP_MPI **msg_p
 	PGP_MPI *m = NULL;
 
 	prefix_len = pgp_get_digest_asn1_prefix(ctx->digest_algo, asn1_prefix);
-	/* sanity check; this should have been checked already */
 	if (prefix_len < 0)
-		/* WTF */
-		//return prefix_len;
-		return PXE_BUG;
+		return prefix_len;
 
 	vessel = px_alloc(klen + prefix_len);
 
@@ -278,10 +275,10 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 
 	hdr[0] = ver;
 
-    if (ctx->text_mode && ctx->convert_crlf)
-        hdr[1] = PGP_SIGTYP_TEXT;
-    else
-        hdr[1] = PGP_SIGTYP_BINARY;
+	if (ctx->text_mode && ctx->convert_crlf)
+		hdr[1] = PGP_SIGTYP_TEXT;
+	else
+		hdr[1] = PGP_SIGTYP_BINARY;
 
 	hdr[2] = pk->algo;
 	hdr[3] = ctx->digest_algo;
@@ -312,7 +309,7 @@ pgp_write_signature(PGP_Context *ctx, PushFilter *dst)
 			res = sign_and_write_rsa(ctx, digest, digest_len, pk, dst);
 			break;
 		default:
-            /* only RSA is currently supported */
+			/* only RSA is currently supported */
 			res = PXE_PGP_UNKNOWN_PUBALGO;
 	}
 	if (res < 0)
@@ -510,42 +507,42 @@ err:
 static int
 parse_v3_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 {
-    int res;
-    uint8 len;
+	int		res;
+	uint8	len;
 
-    /* one-octet length, must be 5 */
-    res = pullf_read_fixed(pkt, 1, &len);
-    if (res < 0)
-        return res;
-    if (len != 5)
-        return PXE_PGP_CORRUPT_DATA;
+	/* one-octet length, must be 5 */
+	res = pullf_read_fixed(pkt, 1, &len);
+	if (res < 0)
+		return res;
+	if (len != 5)
+		return PXE_PGP_CORRUPT_DATA;
 
 	res = pullf_read_fixed(pkt, 1, &sig->type);
 	if (res < 0)
-        return res;
-    res = pullf_read_fixed(pkt, 4, sig->creation_time);
-    if (res < 0)
-        return res;
-    res = pullf_read_fixed(pkt, 8, sig->keyid);
+		return res;
+	res = pullf_read_fixed(pkt, 4, sig->creation_time);
 	if (res < 0)
-        return res;
+		return res;
+	res = pullf_read_fixed(pkt, 8, sig->keyid);
+	if (res < 0)
+		return res;
 	res = pullf_read_fixed(pkt, 1, &sig->algo);
 	if (res < 0)
-        return res;
+		return res;
 	res = pullf_read_fixed(pkt, 1, &sig->digest_algo);
-    if (res < 0)
-        return res;
+	if (res < 0)
+		return res;
 
 	res = pullf_read_fixed(pkt, 2, sig->expected_digest_l16);
 
-    if (res >= 0)
-    {
-        /* write trailer */
-        mbuf_append(sig->trailer, &sig->type, 1);
-        mbuf_append(sig->trailer, sig->creation_time, 4);
-    }
+	if (res >= 0)
+	{
+		/* write trailer */
+		mbuf_append(sig->trailer, &sig->type, 1);
+		mbuf_append(sig->trailer, sig->creation_time, 4);
+	}
 
-    return res;
+	return res;
 }
 
 static int
@@ -559,8 +556,8 @@ parse_v4_signature_header(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 	PullFilter  *tr = NULL;
 
 	/*
-     * In a V4 header, we need to store everything up to the end of the hashed
-     * subpackets for the hash trailer.
+	 * In a V4 header, we need to store everything up to the end of the hashed
+	 * subpackets for the hash trailer.
 	 */
 	mbuf_append(sig->trailer, &sig->version, 1);
 	res = pullf_create_tee_reader(&tr, pkt, sig->trailer);
@@ -662,12 +659,12 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 
 	switch (pk->algo)
 	{
-        case PGP_PUB_RSA_SIGN:
+		case PGP_PUB_RSA_SIGN:
 		case PGP_PUB_RSA_ENCRYPT_SIGN:
 			res = decrypt_rsa_signature(pk, pkt, &m);
 			break;
 		default:
-            /* only RSA is currently supported */
+			/* only RSA is currently supported */
 			res = PXE_PGP_UNKNOWN_PUBALGO;
 	}
 	if (res < 0)
@@ -688,7 +685,7 @@ parse_signature_payload(PGP_Context *ctx, PullFilter *pkt, PGP_Signature *sig)
 	prefix_len = pgp_get_digest_asn1_prefix(sig->digest_algo, asn1_prefix);
 	if (prefix_len < 0)
 	{
-        px_debug("digest algo %d does not have an ASN1 prefix", sig->digest_algo);
+		px_debug("digest algo %d does not have an ASN1 prefix", sig->digest_algo);
 		res = PXE_PGP_UNSUPPORTED_HASH;
 		goto out;
 	}
@@ -716,14 +713,14 @@ out:
 int
 pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt)
 {
-    PGP_Signature *sig;
-	uint8		version;
-	uint8		type;
-	uint8		digestalgo;
-	uint8		pubkeyalgo;
-	uint8		last;
-    uint8       keyid[8];
-	int         res;
+	PGP_Signature *sig;
+	uint8	version;
+	uint8	type;
+	uint8	digestalgo;
+	uint8	pubkeyalgo;
+	uint8	last;
+	uint8	keyid[8];
+	int		res;
 
 	GETBYTE(pkt, version);
 	GETBYTE(pkt, type);
@@ -734,18 +731,18 @@ pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter 
 		return res;
 	GETBYTE(pkt, last);
 
-    res = pgp_sig_create(&sig);
-    if (res < 0)
-        return res;
+	res = pgp_sig_create(&sig);
+	if (res < 0)
+		return res;
 
-    sig->onepass = 1;
-    memcpy(sig->keyid, keyid, 8);
-    sig->version = version;
-    sig->type = type;
-    sig->digest_algo = digestalgo;
-    sig->algo = pubkeyalgo;
-    *sig_p = sig;
-    return 0;
+	sig->onepass = 1;
+	memcpy(sig->keyid, keyid, 8);
+	sig->version = version;
+	sig->type = type;
+	sig->digest_algo = digestalgo;
+	sig->algo = pubkeyalgo;
+	*sig_p = sig;
+	return 0;
 }
 
 int
@@ -771,10 +768,10 @@ pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p, PullFilter *pkt, ui
 	if (res < 0)
 		goto err;
 
-    if (expected_keyid &&
-        memcmp(expected_keyid, sig->keyid, 8) == 0)
+	if (expected_keyid &&
+		memcmp(expected_keyid, sig->keyid, 8) == 0)
 		res = parse_signature_payload(ctx, pkt, sig);
-    else
+	else
 		res = pullf_discard(pkt, -1);
 
 err:
@@ -795,10 +792,10 @@ pgp_verify_signature(PGP_Context *ctx)
 	PX_MD *md = ctx->sig_digest_ctx;
 	PGP_Signature *sig = ctx->sig_expected;
 
-    if (!md)
-        return PXE_BUG;
-    if (!sig)
-        return PXE_PGP_NO_SIGNATURE;
+	if (!md)
+		return PXE_BUG;
+	if (!sig)
+		return PXE_PGP_NO_SIGNATURE;
 	if (sig->version != 3 && sig->version != 4)
 		return PXE_BUG;
 
