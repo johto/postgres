@@ -108,6 +108,7 @@ bool		am_db_walsender = false;	/* Connected to a database? */
 int			max_wal_senders = 0;	/* the maximum number of concurrent walsenders */
 int			wal_sender_timeout = 60 * 1000;		/* maximum time to send one
 												 * WAL data message */
+bool		log_replication_commands = false;
 
 /*
  * State for WalSndWakeupRequest
@@ -573,7 +574,7 @@ StartReplication(StartReplicationCmd *cmd)
 			 * to find the requested WAL segment in pg_xlog.
 			 *
 			 * XXX: we could be more strict here and only allow a startpoint
-			 * that's older than the switchpoint, if it it's still in the same
+			 * that's older than the switchpoint, if it's still in the same
 			 * WAL segment.
 			 */
 			if (!XLogRecPtrIsInvalid(switchpoint) &&
@@ -1203,9 +1204,11 @@ WalSndWaitForWal(XLogRecPtr loc)
 		 * possibly are waiting for a later location. So we send pings
 		 * containing the flush location every now and then.
 		 */
-		if (MyWalSnd->flush < sentPtr && !waiting_for_ping_response)
+		if (MyWalSnd->flush < sentPtr &&
+			MyWalSnd->write < sentPtr &&
+			!waiting_for_ping_response)
 		{
-			WalSndKeepalive(true);
+			WalSndKeepalive(false);
 			waiting_for_ping_response = true;
 		}
 
@@ -1266,12 +1269,18 @@ exec_replication_command(const char *cmd_string)
 	MemoryContext old_context;
 
 	/*
+	 * Log replication command if log_replication_commands is enabled.
+	 * Even when it's disabled, log the command with DEBUG1 level for
+	 * backward compatibility.
+	 */
+	ereport(log_replication_commands ? LOG : DEBUG1,
+			(errmsg("received replication command: %s", cmd_string)));
+
+	/*
 	 * CREATE_REPLICATION_SLOT ... LOGICAL exports a snapshot until the next
 	 * command arrives. Clean up the old stuff if there's anything.
 	 */
 	SnapBuildClearExportedSnapshot();
-
-	elog(DEBUG1, "received replication command: %s", cmd_string);
 
 	CHECK_FOR_INTERRUPTS();
 

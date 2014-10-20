@@ -489,6 +489,10 @@ DefineIndex(Oid relationId,
 	accessMethodId = HeapTupleGetOid(tuple);
 	accessMethodForm = (Form_pg_am) GETSTRUCT(tuple);
 
+	if (strcmp(accessMethodName, "hash") == 0)
+		ereport(WARNING,
+				(errmsg("hash indexes are not WAL-logged and their use is discouraged")));
+
 	if (stmt->unique && !accessMethodForm->amcanunique)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

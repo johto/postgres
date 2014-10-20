@@ -1288,6 +1288,12 @@ setup_config(void)
 	conflines = replace_token(conflines, "#dynamic_shared_memory_type = posix",
 							  repltok);
 
+#ifndef USE_PREFETCH
+	conflines = replace_token(conflines,
+							  "#effective_io_concurrency = 1",
+							  "#effective_io_concurrency = 0");
+#endif
+
 	snprintf(path, sizeof(path), "%s/postgresql.conf", pg_data);
 
 	writefile(path, conflines);
@@ -2548,7 +2554,7 @@ check_locale_name(int category, const char *locale, char **canonname)
 	save = setlocale(category, NULL);
 	if (!save)
 	{
-		fprintf(stderr, _("%s: setlocale failed\n"),
+		fprintf(stderr, _("%s: setlocale() failed\n"),
 				progname);
 		exit(1);
 	}
