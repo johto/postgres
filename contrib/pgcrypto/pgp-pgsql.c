@@ -34,6 +34,7 @@
 #include "lib/stringinfo.h"
 #include "catalog/pg_type.h"
 #include "mb/pg_wchar.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "funcapi.h"
 #include "utils/memutils.h"
