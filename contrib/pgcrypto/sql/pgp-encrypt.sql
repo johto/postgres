@@ -13,7 +13,8 @@ select pgp_sym_decrypt(pgp_sym_encrypt('Secret.', 'key'),
 		expect-sess-key=0,
 		expect-s2k-mode=3,
 		expect-s2k-digest-algo=sha1,
-		expect-compress-algo=0
+		expect-compress-algo=0,
+		expect-digest-algo=sha512
 		');
 
 -- maybe the expect- stuff simply does not work
@@ -23,7 +24,8 @@ select pgp_sym_decrypt(pgp_sym_encrypt('Secret.', 'key'),
 		expect-sess-key=1,
 		expect-s2k-mode=0,
 		expect-s2k-digest-algo=md5,
-		expect-compress-algo=1
+		expect-compress-algo=1,
+		expect-digest-algo=md5
 		');
 
 -- bytea as text

@@ -109,7 +109,10 @@ int pullf_read_max(PullFilter *mp, int len,
 			   uint8 **data_p, uint8 *tmpbuf);
 void		pullf_free(PullFilter *mp);
 int			pullf_read_fixed(PullFilter *src, int len, uint8 *dst);
+int			pullf_discard(PullFilter *src, int max);
 
+int			pullf_create_limited_reader(PullFilter **pf_p, PullFilter *src, int *limit);
+int			pullf_create_tee_reader(PullFilter **mp_p, PullFilter *src, MBuf *buf);
 int			pullf_create_mbuf_reader(PullFilter **pf_p, MBuf *mbuf);
 
 #define GETBYTE(pf, dst) \

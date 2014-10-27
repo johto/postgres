@@ -144,6 +144,93 @@ static const PushFilterOps mdc_filter = {
 	mdc_init, mdc_write, mdc_flush, mdc_free
 };
 
+/*
+ * Signature writer filter
+ */
+
+static int
+sig_writer_flush(PushFilter *dst, void *priv)
+{
+	int				res;
+	int				len;
+	PGP_Context    *ctx = priv;
+	MBuf		   *buf = NULL;
+	PushFilter	   *pf = NULL;
+	uint8		   *data = NULL;
+
+	/*
+	 * Capture all the data into an mbuf so we don't have to worry about the
+	 * length of the packet.
+	 */
+	buf = mbuf_create(0);
+	res = pushf_create_mbuf_writer(&pf, buf);
+	if (res < 0)
+		goto err;
+
+	res = pgp_write_signature(ctx, pf);
+	if (res < 0)
+		goto err;
+
+	len = mbuf_grab(buf, mbuf_avail(buf), &data);
+	res = write_normal_header(dst, PGP_PKT_SIGNATURE, len);
+	if (res < 0)
+		goto err;
+
+	res = pushf_write(dst, data, len);
+
+err:
+	if (pf)
+		pushf_free(pf);
+	if (buf)
+		mbuf_free(buf);
+	return res;
+}
+
+static const PushFilterOps sig_writer_filter = {
+	NULL, NULL, sig_writer_flush, NULL
+};
+
+
+/*
+ * Signature computation filter
+ *
+ * This filter only computes the literal data packet's contents into
+ * ctx->sig_digest_ctx.  No signature is written (since we wouldn't be able to
+ * write it into the correct place in the flush callback).
+ */
+
+static int
+sig_compute_init(PushFilter *dst, void *init_arg, void **priv_p)
+{
+	int				res;
+	PGP_Context	   *ctx = init_arg;
+
+	/*
+	 * Load the digest into sig_digest_ctx for everyone to use.  It'll also be
+	 * freed in pgp_sig_free, not when this filter is done.
+	 */
+	res = pgp_load_digest(ctx->digest_algo, &ctx->sig_digest_ctx);
+	if (res < 0)
+		return res;
+
+	*priv_p = ctx->sig_digest_ctx;
+	return 0;
+}
+
+static int
+sig_compute_write(PushFilter *dst, void *priv, const uint8 *data, int len)
+{
+	PX_MD	   *md = priv;
+
+	px_md_update(md, data, len);
+	return pushf_write(dst, data, len);
+}
+
+static const PushFilterOps sig_compute_filter = {
+	sig_compute_init, sig_compute_write, NULL, NULL
+};
+
+
 
 /*
  * Encrypted pkt writer
@@ -495,6 +582,47 @@ write_prefix(PGP_Context *ctx, PushFilter *dst)
 }
 
 /*
+ * Initializes one-pass signature state and writes the one-pass signature
+ * packet.  The packet contains enough information for the reader to decrypt
+ * and verify the signature in a single pass over the encrypted data.
+ */
+static int
+init_onepass_signature(PushFilter **pf_res, PGP_Context *ctx, PushFilter *dst)
+{
+	int		res;
+	uint8	hdr[4];
+	uint8	ver = 3;
+	uint8	last = 1;
+
+	res = write_normal_header(dst, PGP_PKT_ONEPASS_SIGNATURE, 4 + 8 + 1);
+	if (res < 0)
+		return res;
+
+	hdr[0] = ver;
+
+	if (ctx->text_mode && ctx->convert_crlf)
+		hdr[1] = PGP_SIGTYP_TEXT;
+	else
+		hdr[1] = PGP_SIGTYP_BINARY;
+
+	hdr[2] = ctx->digest_algo;
+	hdr[3] = ctx->sig_key->algo;
+	res = pushf_write(dst, hdr, sizeof(hdr));
+	if (res < 0)
+		return res;
+
+	res = pushf_write(dst, ctx->sig_key->key_id, 8);
+	if (res < 0)
+		return res;
+	/* we only support one signature per message */
+	res = pushf_write(dst, &last, 1);
+	if (res < 0)
+		return res;
+	return pushf_create(pf_res, &sig_writer_filter, ctx, dst);
+}
+
+
+/*
  * write symmetrically encrypted session key packet
  */
 
@@ -678,12 +806,32 @@ pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst)
 		pf = pf_tmp;
 	}
 
+	/* one-pass signature signature */
+	if (ctx->sig_key)
+	{
+		res = init_onepass_signature(&pf_tmp, ctx, pf);
+		if (res < 0)
+			goto out;
+		pf = pf_tmp;
+	}
+
 	/* data streamer */
 	res = init_litdata_packet(&pf_tmp, ctx, pf);
 	if (res < 0)
 		goto out;
 	pf = pf_tmp;
 
+	/*
+	 * If we're writing a signature, also add the signature computation filter
+	 * right after the text mode canonicalization.
+	 */
+	if (ctx->sig_key)
+	{
+		res = pushf_create(&pf_tmp, &sig_compute_filter, ctx, pf);
+		if (res < 0)
+			goto out;
+		pf = pf_tmp;
+	}
 
 	/* text conversion? */
 	if (ctx->text_mode && ctx->convert_crlf)

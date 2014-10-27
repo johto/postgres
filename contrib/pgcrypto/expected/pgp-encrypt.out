@@ -16,7 +16,8 @@ select pgp_sym_decrypt(pgp_sym_encrypt('Secret.', 'key'),
 		expect-sess-key=0,
 		expect-s2k-mode=3,
 		expect-s2k-digest-algo=sha1,
-		expect-compress-algo=0
+		expect-compress-algo=0,
+		expect-digest-algo=sha512
 		');
  pgp_sym_decrypt 
 -----------------
@@ -30,9 +31,11 @@ select pgp_sym_decrypt(pgp_sym_encrypt('Secret.', 'key'),
 		expect-sess-key=1,
 		expect-s2k-mode=0,
 		expect-s2k-digest-algo=md5,
-		expect-compress-algo=1
+		expect-compress-algo=1,
+		expect-digest-algo=md5
 		');
 NOTICE:  pgp_decrypt: unexpected cipher_algo: expected 4 got 7
+NOTICE:  pgp_decrypt: unexpected digest_algo: expected 1 got 10
 NOTICE:  pgp_decrypt: unexpected s2k_mode: expected 0 got 3
 NOTICE:  pgp_decrypt: unexpected s2k_digest_algo: expected 1 got 2
 NOTICE:  pgp_decrypt: unexpected use_sess_key: expected 1 got 0

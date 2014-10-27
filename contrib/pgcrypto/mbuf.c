@@ -332,6 +332,48 @@ pullf_read_fixed(PullFilter *src, int len, uint8 *dst)
 }
 
 /*
+ * pullf_discard discards max bytes from src.  Reaching EOF before max bytes
+ * have been read will return PXE_MBUF_SHORT_READ.  If max is -1, all bytes
+ * until EOF are discarded.  Returns the number of bytes discarded on success,
+ * < 0 otherwise.
+ */
+int
+pullf_discard(PullFilter *src, int max)
+{
+	int		res;
+	uint8  *tmp;
+	int		read = 0;
+
+	if (max == -1)
+	{
+		while (1)
+		{
+			res = pullf_read(src, 8192, &tmp);
+			if (res == 0)
+				return read;
+			else if (res < 0)
+				return res;
+			read += res;
+		}
+	}
+	else
+	{
+		while (1)
+		{
+			if (read == max)
+				return read;
+
+			res = pullf_read(src, max - read, &tmp);
+			if (res == 0)
+				return PXE_MBUF_SHORT_READ;
+			else if (res < 0)
+				return res;
+			read += res;
+		}
+	}
+}
+
+/*
  * read from MBuf
  */
 static int
@@ -352,6 +394,83 @@ pullf_create_mbuf_reader(PullFilter **mp_p, MBuf *src)
 {
 	return pullf_create(mp_p, &mbuf_reader, src, NULL);
 }
+
+/*
+ * reader with a limit
+ */
+
+static int
+limited_reader_pull(void *arg, PullFilter *src, int len,
+					uint8 **data_p, uint8 *buf, int buflen)
+{
+	int    *limit = arg;
+	int		res;
+
+	if (*limit == 0)
+		return 0;
+	if (len > *limit)
+		return PXE_MBUF_SHORT_READ;
+	res = pullf_read(src, len, data_p);
+	if (res > 0)
+	{
+		*limit -= res;
+		if (*limit < 0)
+			return PXE_MBUF_SHORT_READ;
+	}
+	else if (res == 0)
+		return PXE_MBUF_SHORT_READ;
+	return res;
+}
+
+static const struct PullFilterOps limited_reader = {
+	NULL, limited_reader_pull, NULL
+};
+
+/*
+ * Creates a new PullFilter which reads *limit bytes from src.  The caller
+ * should make sure the memory limit points to stays alive until the reader is
+ * destroyed.  The value of *limit is updated after every read.  While reading,
+ * if an EOF is encountered before consuming *limit bytes from src or the
+ * caller tries to read more than *limit bytes in total, PXE_MBUF_SHORT_READ is
+ * returned.
+ */
+int
+pullf_create_limited_reader(PullFilter **mp_p, PullFilter *src, int *limit)
+{
+	return pullf_create(mp_p, &limited_reader, limit, src);
+}
+
+/*
+ * reader which writes a copy to an mbuf
+ */
+static int
+tee_reader_pull(void *arg, PullFilter *src, int len,
+				uint8 **data_p, uint8 *buf, int buflen)
+{
+	MBuf   *mbuf = arg;
+	int		res;
+	int		res2;
+
+	res = pullf_read(src, len, data_p);
+	if (res <= 0)
+		return res;
+	res2 = mbuf_append(mbuf, *data_p, res);
+	if (res2 < 0)
+		return res2;
+	/* return the number of bytes read */
+	return res;
+}
+
+static const struct PullFilterOps tee_reader = {
+	NULL, tee_reader_pull, NULL
+};
+
+int
+pullf_create_tee_reader(PullFilter **mp_p, PullFilter *src, MBuf *buf)
+{
+	return pullf_create(mp_p, &tee_reader, buf, src);
+}
+
 
 
 /*

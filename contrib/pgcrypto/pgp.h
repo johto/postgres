@@ -47,6 +47,7 @@ enum PGP_PKT_TYPE
 	PGP_PKT_PUBENCRYPTED_SESSKEY = 1,
 	PGP_PKT_SIGNATURE = 2,
 	PGP_PKT_SYMENCRYPTED_SESSKEY = 3,
+	PGP_PKT_ONEPASS_SIGNATURE = 4,
 	PGP_PKT_SECRET_KEY = 5,
 	PGP_PKT_PUBLIC_KEY = 6,
 	PGP_PKT_SECRET_SUBKEY = 7,
@@ -109,15 +110,29 @@ enum PGP_DIGEST_TYPE
 	PGP_DIGEST_SHA512 = 10
 };
 
+enum PGP_SIGNATURE_TYPE
+{
+	PGP_SIGTYP_BINARY = 0,
+	PGP_SIGTYP_TEXT = 1
+};
+
+enum PGP_SIGNATURE_SUBPKT_TYPE
+{
+	PGP_SIGNATURE_CREATION_TIME = 2,
+	PGP_ISSUER_ID = 16
+};
+
 #define PGP_MAX_KEY    (256/8)
 #define PGP_MAX_BLOCK  (256/8)
 #define PGP_MAX_DIGEST (512/8)
+#define PGP_MAX_DIGEST_ASN1_PREFIX	20
 #define PGP_S2K_SALT   8
 
 typedef struct PGP_MPI PGP_MPI;
 typedef struct PGP_PubKey PGP_PubKey;
 typedef struct PGP_Context PGP_Context;
 typedef struct PGP_S2K PGP_S2K;
+typedef struct PGP_Signature PGP_Signature;
 
 struct PGP_S2K
 {
@@ -141,6 +156,7 @@ struct PGP_Context
 	int			s2k_digest_algo;
 	int			s2k_cipher_algo;
 	int			cipher_algo;
+	int			digest_algo;
 	int			compress_algo;
 	int			compress_level;
 	int			disable_mdc;
@@ -158,8 +174,13 @@ struct PGP_Context
 	int			use_mdcbuf_filter;
 	PX_MD	   *mdc_ctx;
 
-	PGP_PubKey *pub_key;		/* ctx owns it */
-	const uint8 *sym_key;		/* ctx does not own it */
+	PX_MD	   *sig_digest_ctx;
+	PGP_Signature *sig_onepass;
+	PGP_Signature *sig_expected;
+
+	PGP_PubKey *pub_key;		/* owned by ctx */
+	PGP_PubKey *sig_key;		/* owned by ctx */
+	const uint8 *sym_key;		/* not owned by ctx */
 	int			sym_key_len;
 
 	/*
@@ -229,17 +250,39 @@ struct PGP_PubKey
 	int			can_encrypt;
 };
 
+struct PGP_Signature
+{
+	/* always present */
+	int			onepass;
+	uint8		keyid[8];
+	uint8		version;
+	uint8		type;
+	uint8		algo;
+	uint8		digest_algo;
+
+	/* only present if this is not a one-pass signature */
+	uint32		creation_time;
+	uint8		expected_digest[PGP_MAX_DIGEST];
+	uint8		expected_digest_l16[2];
+	MBuf	   *trailer;
+};
+
 int			pgp_init(PGP_Context **ctx);
 int			pgp_encrypt(PGP_Context *ctx, MBuf *src, MBuf *dst);
 int			pgp_decrypt(PGP_Context *ctx, MBuf *src, MBuf *dst);
 int			pgp_free(PGP_Context *ctx);
 
+int			pgp_sig_create(PGP_Signature **sig_p);
+int			pgp_sig_free(PGP_Signature *sig);
+
 int			pgp_get_digest_code(const char *name);
 int			pgp_get_cipher_code(const char *name);
 const char *pgp_get_digest_name(int code);
 const char *pgp_get_cipher_name(int code);
+int			pgp_get_digest_asn1_prefix(int code, uint8 *data);
 
 int			pgp_set_cipher_algo(PGP_Context *ctx, const char *name);
+int			pgp_set_digest_algo(PGP_Context *ctx, const char *name);
 int			pgp_set_s2k_mode(PGP_Context *ctx, int type);
 int			pgp_set_s2k_cipher_algo(PGP_Context *ctx, const char *name);
 int			pgp_set_s2k_digest_algo(PGP_Context *ctx, const char *name);
@@ -253,10 +296,17 @@ int			pgp_set_unicode_mode(PGP_Context *ctx, int mode);
 int			pgp_get_unicode_mode(PGP_Context *ctx);
 
 int			pgp_set_symkey(PGP_Context *ctx, const uint8 *key, int klen);
-int pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
-			   const uint8 *key, int klen, int pubtype);
+int			pgp_set_sigkey(PGP_Context *ctx, MBuf *keypkt,
+						   const uint8 *key, int klen, int pubtype,
+						   int encrypt);
+int			pgp_set_pubkey(PGP_Context *ctx, MBuf *keypkt,
+						   const uint8 *key, int klen, int pubtype,
+						   int encrypt);
 
-int			pgp_get_keyid(MBuf *pgp_data, char *dst);
+int			pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst);
+int			pgp_get_signatures(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+							   int (*cb)(void *opaque, PGP_Signature *sig, char *keyid),
+							   int extract_details);
 
 /* internal functions */
 
@@ -289,6 +339,8 @@ int			pgp_key_alloc(PGP_PubKey **pk_p);
 void		pgp_key_free(PGP_PubKey *pk);
 int			_pgp_read_public_key(PullFilter *pkt, PGP_PubKey **pk_p);
 
+int			pgp_parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src);
+
 int			pgp_parse_pubenc_sesskey(PGP_Context *ctx, PullFilter *pkt);
 int pgp_create_pkt_reader(PullFilter **pf_p, PullFilter *src, int len,
 					  int pkttype, PGP_Context *ctx);
@@ -300,6 +352,14 @@ int			pgp_expect_packet_end(PullFilter *pkt);
 
 int			pgp_write_pubenc_sesskey(PGP_Context *ctx, PushFilter *dst);
 int			pgp_create_pkt_writer(PushFilter *dst, int tag, PushFilter **res_p);
+
+int			pgp_write_signature(PGP_Context *ctx, PushFilter *dst);
+int			pgp_parse_onepass_signature(PGP_Context *ctx, PGP_Signature **sig_p,
+										PullFilter *pkt);
+int			pgp_parse_signature(PGP_Context *ctx, PGP_Signature **sig_p,
+								PullFilter *pkt, uint8 *expected_keyid);
+int			pgp_verify_signature(PGP_Context *ctx);
+
 
 int			pgp_mpi_alloc(int bits, PGP_MPI **mpi);
 int			pgp_mpi_create(uint8 *data, int bits, PGP_MPI **mpi);
@@ -317,3 +377,4 @@ int			pgp_rsa_encrypt(PGP_PubKey *pk, PGP_MPI *m, PGP_MPI **c);
 int			pgp_rsa_decrypt(PGP_PubKey *pk, PGP_MPI *c, PGP_MPI **m);
 
 extern struct PullFilterOps pgp_decrypt_filter;
+extern struct PullFilterOps pgp_prefix_filter;

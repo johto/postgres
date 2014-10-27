@@ -49,17 +49,18 @@ read_pubkey_keyid(PullFilter *pkt, uint8 *keyid_buf)
 	if (res < 0)
 		goto err;
 
-	/* is it encryption key */
 	switch (pk->algo)
 	{
 		case PGP_PUB_ELG_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT:
 		case PGP_PUB_RSA_ENCRYPT_SIGN:
+		case PGP_PUB_RSA_SIGN:
+		case PGP_PUB_DSA_SIGN:
 			memcpy(keyid_buf, pk->key_id, 8);
 			res = 1;
 			break;
 		default:
-			res = 0;
+			res = PXE_PGP_UNSUPPORTED_PUBALGO;
 	}
 
 err:
@@ -102,14 +103,215 @@ print_key(uint8 *keyid, char *dst)
 	return 8 * 2;
 }
 
-static const uint8 any_key[] =
-{0, 0, 0, 0, 0, 0, 0, 0};
+typedef int (*signature_cb_type)(void *opaque, PGP_Signature *sig);
+
+static int
+extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
+				   signature_cb_type sig_cb,
+				   int extract_details,
+				   int allow_compr);
+
+
+static int
+read_signatures_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
+									 void *opaque, signature_cb_type sig_key_cb,
+									 int extract_details)
+{
+	int res;
+	uint8 type;
+	PullFilter *pf_decompr;
+
+	GETBYTE(pkt, type);
+
+	ctx->compress_algo = type;
+	switch (type)
+	{
+		case PGP_COMPR_NONE:
+			res = extract_signatures(ctx, pf_decompr, opaque,
+									 sig_key_cb, extract_details, 0);
+			break;
+
+		case PGP_COMPR_ZIP:
+		case PGP_COMPR_ZLIB:
+			res = pgp_decompress_filter(&pf_decompr, ctx, pkt);
+			if (res >= 0)
+			{
+				res = extract_signatures(ctx, pf_decompr, opaque,
+										 sig_key_cb, extract_details, 0);
+				pullf_free(pf_decompr);
+			}
+			break;
+
+		case PGP_COMPR_BZIP2:
+			px_debug("read_signatures_from_compressed_data: bzip2 unsupported");
+			res = PXE_PGP_UNSUPPORTED_COMPR;
+			break;
+
+		default:
+			px_debug("read_signatures_from_compressed_data: unknown compr type");
+			res = PXE_PGP_CORRUPT_DATA;
+	}
+
+	return res;
+}
+
+static int
+extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
+				   signature_cb_type sig_cb,
+				   int extract_details,
+				   int allow_compr)
+{
+	int			res;
+	int			len;
+	uint8		tag;
+	int			done  = 0;
+	PullFilter *pkt = NULL;
+	PGP_Signature *sig = NULL;
+
+	while (1)
+	{
+		/*
+		 * We don't need to care about the special handling for PKG_CONTEXT
+		 * length in SYMENC_MDC packets because we skip over the data and never
+		 * check the MDC.
+		 */
+		res = pgp_parse_pkt_hdr(src, &tag, &len, 1);
+		if (res <= 0)
+			break;
+
+		res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
+		if (res < 0)
+			break;
+
+		switch (tag)
+		{
+			case PGP_PKT_SIGNATURE:
+				res = pgp_parse_signature(ctx, &sig, pkt, NULL);
+				if (res >= 0)
+					res = sig_cb(opaque, sig);
+				break;
+			case PGP_PKT_ONEPASS_SIGNATURE:
+				res = pgp_parse_onepass_signature(ctx, &sig, pkt);
+				if (res >= 0)
+					res = sig_cb(opaque, sig);
+				break;
+			case PGP_PKT_COMPRESSED_DATA:
+				if (!allow_compr)
+				{
+					px_debug("extract_signature_keys: unexpected compression");
+					res = PXE_PGP_CORRUPT_DATA;
+				}
+				else
+					res = read_signatures_from_compressed_data(ctx, pkt, opaque,
+															   sig_cb, extract_details);
+				/*
+				 * We're assuming that there will only ever be a single data
+				 * packet, compressed or otherwise.
+				 */
+				if (!extract_details)
+					done = 1;
+				break;
+			case PGP_PKT_LITERAL_DATA:
+			case PGP_PKT_MDC:
+				/*
+				 * If extract_details is not specified, we never look for
+				 * signatures beyond the data as the decryption code doesn't,
+				 * either.
+				 */
+				if (!extract_details)
+					done = 1;
+				else
+					res = pgp_skip_packet(pkt);
+				break;
+
+			case PGP_PKT_TRUST:
+				res = pgp_skip_packet(pkt);
+				break;
+			default:
+				px_debug("extract_signatures: unexpected tag %d", tag);
+				res = PXE_PGP_CORRUPT_DATA;
+		}
+
+		if (pkt)
+			pullf_free(pkt);
+		pkt = NULL;
+		if (sig)
+			pgp_sig_free(sig);
+		sig = NULL;
+
+		if (res < 0 || done)
+			break;
+	}
+
+	return res;
+}
+
 
 /*
- * dst should have room for 17 bytes
+ * Set up everything needed to decrypt the data and extract information about
+ * the signatures.
  */
-int
-pgp_get_keyid(MBuf *pgp_data, char *dst)
+static int
+read_signatures_from_data(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaque,
+						  signature_cb_type sig_key_cb,
+						  int extract_details)
+{
+	int			res;
+	int			resync;
+	PGP_CFB	   *cfb = NULL;
+	PullFilter *pf_decrypt = NULL;
+	PullFilter *pf_prefix = NULL;
+	PullFilter *pf_mdc = NULL;
+
+	if (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC)
+	{
+		uint8 ver;
+
+		GETBYTE(pkt, ver);
+		if (ver != 1)
+		{
+			px_debug("read_signature_from_data: pkt ver != 1");
+			return PXE_PGP_CORRUPT_DATA;
+		}
+		resync = 0;
+	}
+	else
+		resync = 1;
+
+	res = pgp_cfb_create(&cfb, ctx->cipher_algo,
+						 ctx->sess_key, ctx->sess_key_len, resync, NULL);
+	if (res < 0)
+		goto out;
+
+	res = pullf_create(&pf_decrypt, &pgp_decrypt_filter, cfb, pkt);
+	if (res < 0)
+		goto out;
+
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
+	if (res < 0)
+		goto out;
+
+	res = extract_signatures(ctx, pf_prefix, opaque, sig_key_cb, extract_details, 1);
+
+out:
+	if (pf_prefix)
+		pullf_free(pf_prefix);
+	if (pf_mdc)
+		pullf_free(pf_mdc);
+	if (pf_decrypt)
+		pullf_free(pf_decrypt);
+	if (cfb)
+		pgp_cfb_free(cfb);
+
+	return res;
+}
+
+static int
+get_key_information(PGP_Context *ctx, MBuf *pgp_data, int want_main_key,
+					void *opaque,
+					int (*key_cb)(void *opaque, uint8 keyid[8]),
+					signature_cb_type sig_cb,
+					int extract_details)
 {
 	int			res;
 	PullFilter *src;
@@ -122,6 +324,7 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 	int			got_data = 0;
 	uint8		keyid_buf[8];
 	int			got_main_key = 0;
+	PGP_Signature *sig = NULL;
 
 
 	res = pullf_create_mbuf_reader(&src, pgp_data);
@@ -141,36 +344,57 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 		{
 			case PGP_PKT_SECRET_KEY:
 			case PGP_PKT_PUBLIC_KEY:
-				/* main key is for signing, so ignore it */
-				if (!got_main_key)
+				if (got_main_key)
+					res = PXE_PGP_MULTIPLE_KEYS;
+				else
 				{
 					got_main_key = 1;
-					res = pgp_skip_packet(pkt);
+					if (want_main_key)
+						res = read_pubkey_keyid(pkt, keyid_buf);
+					else
+						res = pgp_skip_packet(pkt);
 				}
-				else
-					res = PXE_PGP_MULTIPLE_KEYS;
 				break;
 			case PGP_PKT_SECRET_SUBKEY:
 			case PGP_PKT_PUBLIC_SUBKEY:
-				res = read_pubkey_keyid(pkt, keyid_buf);
-				if (res < 0)
-					break;
-				if (res > 0)
-					got_pub_key++;
-				break;
-			case PGP_PKT_PUBENCRYPTED_SESSKEY:
-				got_pubenc_key++;
-				res = read_pubenc_keyid(pkt, keyid_buf);
-				break;
-			case PGP_PKT_SYMENCRYPTED_DATA:
-			case PGP_PKT_SYMENCRYPTED_DATA_MDC:
-				/* don't skip it, just stop */
-				got_data = 1;
+				if (want_main_key)
+					res = pgp_skip_packet(pkt);
+				else
+				{
+					res = read_pubkey_keyid(pkt, keyid_buf);
+					if (res > 0)
+						got_pub_key++;
+				}
 				break;
 			case PGP_PKT_SYMENCRYPTED_SESSKEY:
 				got_symenc_key++;
-				/* fallthru */
+				if (sig_cb)
+					res = pgp_parse_symenc_sesskey(ctx, pkt);
+				else
+					res = pgp_skip_packet(pkt);
+				break;
+			case PGP_PKT_PUBENCRYPTED_SESSKEY:
+				got_pubenc_key++;
+				if (sig_cb)
+					res = pgp_parse_pubenc_sesskey(ctx, pkt);
+				else
+					res = read_pubenc_keyid(pkt, keyid_buf);
+				break;
+			case PGP_PKT_SYMENCRYPTED_DATA:
+			case PGP_PKT_SYMENCRYPTED_DATA_MDC:
+				/*
+				 * If there's a key callback, read all the keys from the
+				 * encrypted data.  Otherwise we're done.
+				 */
+				got_data = 1;
+				if (sig_cb)
+					res = read_signatures_from_data(ctx, pkt, tag, opaque, sig_cb, extract_details);
+				break;
 			case PGP_PKT_SIGNATURE:
+				/*
+				 * We ignore signatures not part of the encrypted data since we
+				 * won't use them anyway.
+				 */
 			case PGP_PKT_MARKER:
 			case PGP_PKT_TRUST:
 			case PGP_PKT_USER_ID:
@@ -185,6 +409,9 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 		if (pkt)
 			pullf_free(pkt);
 		pkt = NULL;
+		if (sig)
+			pgp_sig_free(sig);
+		sig = NULL;
 
 		if (res < 0 || got_data)
 			break;
@@ -210,26 +437,106 @@ pgp_get_keyid(MBuf *pgp_data, char *dst)
 	/*
 	 * if still ok, look what we got
 	 */
-	if (res >= 0)
+	if (res < 0)
+		return res;
+
+	if (key_cb)
 	{
-		if (got_pubenc_key || got_pub_key)
+		if (want_main_key)
 		{
-			if (memcmp(keyid_buf, any_key, 8) == 0)
-			{
-				memcpy(dst, "ANYKEY", 7);
-				res = 6;
-			}
+			if (got_main_key)
+				res = key_cb(opaque, keyid_buf);
 			else
-				res = print_key(keyid_buf, dst);
-		}
-		else if (got_symenc_key)
-		{
-			memcpy(dst, "SYMKEY", 7);
-			res = 6;
+				res = PXE_PGP_NO_SIGN_KEY;
 		}
 		else
-			res = PXE_PGP_NO_USABLE_KEY;
+		{
+			if (got_pubenc_key || got_pub_key)
+				res = key_cb(opaque, keyid_buf);
+			else if (got_symenc_key)
+				res = key_cb(opaque, NULL);
+			else
+				res = PXE_PGP_NO_USABLE_KEY;
+		}
 	}
 
 	return res;
 }
+
+static const uint8 any_key[] =
+{0, 0, 0, 0, 0, 0, 0, 0};
+
+static int
+get_keyid_cb(void *opaque, uint8 keyid[8])
+{
+	char *dst = (char *) opaque;
+	if (keyid == NULL)
+	{
+		memcpy(dst, "SYMKEY", 7);
+		return 6;
+	}
+	else if (memcmp(keyid, any_key, 8) == 0)
+	{
+		memcpy(dst, "ANYKEY", 7);
+		return 6;
+	}
+	else
+		return print_key(keyid, dst);
+}
+
+/*
+ * dst should have room for 17 bytes
+ */
+int
+pgp_get_keyid(int want_main_key, MBuf *pgp_data, char *dst)
+{
+	return get_key_information(NULL, pgp_data, want_main_key, dst, get_keyid_cb, NULL, 0);
+}
+
+struct GetSignatureInfoCtx
+{
+	int   (*cb)(void *opaque, PGP_Signature *sig, char *keyid);
+	void   *opaque;
+	int		extract_details;
+};
+
+static int
+get_signature_info_cb(void *opaque, PGP_Signature *sig)
+{
+	char keyid[17];
+	struct GetSignatureInfoCtx *ctx = opaque;
+
+	/* ignore signatures not used for literal data */
+	if (sig->type != PGP_SIGTYP_BINARY &&
+		sig->type != PGP_SIGTYP_TEXT)
+		return 0;
+
+	/*
+	 * Also skip one-pass signatures if we're extracting details; there should
+	 * be a corresponding signature packet after the data with all the details.
+	 */
+	if (sig->onepass && ctx->extract_details)
+		return 0;
+
+	if (memcmp(sig->keyid, any_key, 8) == 0)
+		memcpy(keyid, "ANYKEY", 7);
+	else
+		print_key(sig->keyid, keyid);
+	return ctx->cb(ctx->opaque, sig, keyid);
+}
+
+int
+pgp_get_signatures(PGP_Context *ctx, MBuf *pgp_data, void *opaque,
+				   int (*cb)(void *opaque, PGP_Signature *sig, char *keyid),
+				   int extract_details)
+{
+	struct GetSignatureInfoCtx cbctx;
+
+	memset(&cbctx, 0, sizeof(cbctx));
+	cbctx.cb = cb;
+	cbctx.opaque = opaque;
+	cbctx.extract_details = extract_details;
+	return get_key_information(ctx, pgp_data, 0, &cbctx, NULL,
+							   get_signature_info_cb, extract_details);
+}
+

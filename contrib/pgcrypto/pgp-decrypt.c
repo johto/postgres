@@ -155,7 +155,15 @@ pgp_parse_pkt_hdr(PullFilter *src, uint8 *tag, int *len_p, int allow_ctx)
 		lentype = *p & 3;
 		*tag = (*p >> 2) & 0x0F;
 		if (lentype == 3)
-			res = allow_ctx ? PKT_CONTEXT : PXE_PGP_CORRUPT_DATA;
+		{
+			if (!allow_ctx)
+			{
+				px_debug("pgp_parse_pkt_hdr: lentype==3 but allow_context is false");
+				res = PXE_PGP_CORRUPT_DATA;
+			}
+			else
+				res = PKT_CONTEXT;
+		}
 		else
 			res = parse_old_len(src, len_p, lentype);
 	}
@@ -284,7 +292,7 @@ prefix_init(void **priv_p, void *arg, PullFilter *src)
 	return 0;
 }
 
-static struct PullFilterOps prefix_filter = {
+struct PullFilterOps pgp_prefix_filter = {
 	prefix_init, NULL, NULL
 };
 
@@ -638,8 +646,8 @@ decrypt_key(PGP_Context *ctx, const uint8 *src, int len)
 /*
  * Handle key packet
  */
-static int
-parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src)
+int
+pgp_parse_symenc_sesskey(PGP_Context *ctx, PullFilter *src)
 {
 	uint8	   *p;
 	int			res;
@@ -805,12 +813,19 @@ parse_literal_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 
 	ctx->unicode_mode = (type == 'u') ? 1 : 0;
 
+	/* if verifying, a hashing context should have been set up for us */
+	if (ctx->sig_key && ctx->sig_digest_ctx == NULL)
+		return PXE_BUG;
+
 	/* read data */
 	while (1)
 	{
 		res = pullf_read(pkt, 32 * 1024, &buf);
 		if (res <= 0)
 			break;
+
+		if (ctx->sig_digest_ctx)
+			px_md_update(ctx->sig_digest_ctx, buf, res);
 
 		if (ctx->text_mode && ctx->convert_crlf)
 			res = copy_crlf(dst, buf, res, &got_cr);
@@ -869,6 +884,90 @@ parse_compressed_data(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
 }
 
 static int
+parse_onepass_signature(PGP_Context *ctx, MBuf *dst, PullFilter *pkt)
+{
+	int				res;
+	PGP_Signature  *sig;
+
+	/* don't bother if we weren't asked to verify signatures */
+	if (!ctx->sig_key)
+		return pgp_skip_packet(pkt);
+
+	res = pgp_parse_onepass_signature(ctx, &sig, pkt);
+	if (res < 0)
+		return res;
+
+	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
+		sig->algo == ctx->sig_key->algo &&
+		(sig->type == PGP_SIGTYP_BINARY ||
+		 sig->type == PGP_SIGTYP_TEXT))
+	{
+		if (ctx->sig_onepass)
+			res = PXE_PGP_MULTIPLE_SIGNATURES;
+		else if (ctx->sig_digest_ctx)
+			res = PXE_BUG;
+		else
+			res = pgp_load_digest(sig->digest_algo, &ctx->sig_digest_ctx);
+
+		if (res < 0)
+			pgp_sig_free(sig);
+		else
+			ctx->sig_onepass = sig;
+	}
+	else
+		res = pgp_sig_free(sig);
+	return res;
+}
+
+static int
+parse_signature(PGP_Context *ctx, PullFilter *pkt)
+{
+	int res;
+	PGP_Signature *sig;
+
+	/* don't bother if we weren't asked to verify signatures */
+	if (!ctx->sig_key)
+		return pgp_skip_packet(pkt);
+
+	res = pgp_parse_signature(ctx, &sig, pkt, ctx->sig_key->key_id);
+	if (res < 0)
+		return res;
+
+	if (memcmp(sig->keyid, ctx->sig_key->key_id, 8) == 0 &&
+		sig->algo == ctx->sig_key->algo &&
+		(sig->type == PGP_SIGTYP_BINARY ||
+		 sig->type == PGP_SIGTYP_TEXT))
+	{
+		if (ctx->sig_expected)
+			res = PXE_PGP_MULTIPLE_SIGNATURES;
+		else if (ctx->sig_onepass)
+		{
+			if (ctx->sig_onepass->algo != sig->algo ||
+				ctx->sig_onepass->digest_algo != sig->digest_algo)
+				res = PXE_PGP_CONFLICTING_SIGNATURES;
+		}
+		else
+		{
+			/* if there was no one-pass signature, load sig_digest_ctx now */
+			if (ctx->sig_digest_ctx)
+				res = PXE_BUG;
+			else
+				res = pgp_load_digest(sig->digest_algo, &ctx->sig_digest_ctx);
+		}
+
+		if (res < 0)
+			pgp_sig_free(sig);
+		else
+			ctx->sig_expected = sig;
+	}
+	else
+		pgp_sig_free(sig);
+
+	return res;
+}
+
+
+static int
 process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 					 int allow_compr, int need_mdc)
 {
@@ -906,8 +1005,17 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 		switch (tag)
 		{
 			case PGP_PKT_LITERAL_DATA:
-				got_data = 1;
-				res = parse_literal_data(ctx, dst, pkt);
+				if (ctx->sig_key && !ctx->sig_onepass && !ctx->sig_expected)
+				{
+					px_debug("process_data_packets: no signature or one-pass "
+							 "signature before literal data");
+					res = PXE_PGP_NO_SIGNATURE;
+				}
+				else
+				{
+					got_data = 1;
+					res = parse_literal_data(ctx, dst, pkt);
+				}
 				break;
 			case PGP_PKT_COMPRESSED_DATA:
 				if (allow_compr == 0)
@@ -943,6 +1051,12 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 				res = pullf_read(pkt, 8192, &tmp);
 				if (res > 0)
 					got_mdc = 1;
+				break;
+			case PGP_PKT_ONEPASS_SIGNATURE:
+				res = parse_onepass_signature(ctx, dst, pkt);
+				break;
+			case PGP_PKT_SIGNATURE:
+				res = parse_signature(ctx, pkt);
 				break;
 			default:
 				px_debug("process_data_packets: unexpected pkt tag=%d", tag);
@@ -992,7 +1106,7 @@ parse_symenc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_prefix, &prefix_filter, ctx, pf_decrypt);
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;
 
@@ -1039,7 +1153,7 @@ parse_symenc_mdc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_prefix, &prefix_filter, ctx, pf_mdc);
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_mdc);
 	if (res < 0)
 		goto out;
 
@@ -1139,7 +1253,7 @@ pgp_decrypt(PGP_Context *ctx, MBuf *msrc, MBuf *mdst)
 				else
 				{
 					got_key = 1;
-					res = parse_symenc_sesskey(ctx, pkt);
+					res = pgp_parse_symenc_sesskey(ctx, pkt);
 				}
 				break;
 			case PGP_PKT_SYMENCRYPTED_DATA:
@@ -1187,3 +1301,4 @@ pgp_decrypt(PGP_Context *ctx, MBuf *msrc, MBuf *mdst)
 
 	return res;
 }
+
