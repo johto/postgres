@@ -127,7 +127,7 @@ read_signatures_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
 	switch (type)
 	{
 		case PGP_COMPR_NONE:
-			res = extract_signatures(ctx, pf_decompr, opaque,
+			res = extract_signatures(ctx, pkt, opaque,
 									 sig_key_cb, extract_details, 0);
 			break;
 
