@@ -208,8 +208,9 @@ extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
 				 * We're assuming that there will only ever be a single data
 				 * packet, compressed or otherwise.
 				 */
-				if (!extract_details)
+				//if (!extract_details)
 					done = 1;
+				//elog(INFO, "past data?");
 				break;
 			case PGP_PKT_LITERAL_DATA:
 			case PGP_PKT_MDC:
