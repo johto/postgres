@@ -441,7 +441,7 @@ mdc_read(void *priv, PullFilter *src, int len,
 	return res;
 }
 
-static struct PullFilterOps mdc_filter = {
+struct PullFilterOps pgp_mdc_filter = {
 	mdc_init, mdc_read, mdc_free
 };
 
@@ -605,7 +605,7 @@ mdcbuf_free(void *priv)
 	px_free(st);
 }
 
-static struct PullFilterOps mdcbuf_filter = {
+struct PullFilterOps pgp_mdcbuf_filter = {
 	mdcbuf_init, mdcbuf_read, mdcbuf_free
 };
 
@@ -996,7 +996,7 @@ process_data_packets(PGP_Context *ctx, MBuf *dst, PullFilter *src,
 
 		/* context length inside SYMENC_MDC needs special handling */
 		if (need_mdc && res == PKT_CONTEXT)
-			res = pullf_create(&pkt, &mdcbuf_filter, ctx, src);
+			res = pullf_create(&pkt, &pgp_mdcbuf_filter, ctx, src);
 		else
 			res = pgp_create_pkt_reader(&pkt, src, len, res, ctx);
 		if (res < 0)
@@ -1149,7 +1149,7 @@ parse_symenc_mdc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_mdc, &mdc_filter, ctx, pf_decrypt);
+	res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
 	if (res < 0)
 		goto out;
 

@@ -109,6 +109,7 @@ static int
 extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
 				   signature_cb_type sig_cb,
 				   int extract_details,
+				   int need_mdc,
 				   int allow_compr);
 
 
@@ -128,7 +129,7 @@ read_signatures_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
 	{
 		case PGP_COMPR_NONE:
 			res = extract_signatures(ctx, pkt, opaque,
-									 sig_key_cb, extract_details, 0);
+									 sig_key_cb, extract_details, 0, 0);
 			break;
 
 		case PGP_COMPR_ZIP:
@@ -137,7 +138,7 @@ read_signatures_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
 			if (res >= 0)
 			{
 				res = extract_signatures(ctx, pf_decompr, opaque,
-										 sig_key_cb, extract_details, 0);
+										 sig_key_cb, extract_details, 0, 0);
 				pullf_free(pf_decompr);
 			}
 			break;
@@ -155,10 +156,14 @@ read_signatures_from_compressed_data(PGP_Context *ctx, PullFilter *pkt,
 	return res;
 }
 
+// "Context length" type packet
+#define PKT_CONTEXT 3
+
 static int
 extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
 				   signature_cb_type sig_cb,
 				   int extract_details,
+				   int need_mdc,
 				   int allow_compr)
 {
 	int			res;
@@ -170,16 +175,15 @@ extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
 
 	while (1)
 	{
-		/*
-		 * We don't need to care about the special handling for PKG_CONTEXT
-		 * length in SYMENC_MDC packets because we skip over the data and never
-		 * check the MDC.
-		 */
 		res = pgp_parse_pkt_hdr(src, &tag, &len, 1);
 		if (res <= 0)
 			break;
 
-		res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
+		/* context length inside SYMENC_MDC needs special handling */
+		if (need_mdc && res == PKT_CONTEXT)
+			res = pullf_create(&pkt, &pgp_mdcbuf_filter, ctx, src);
+		else
+			res = pgp_create_pkt_reader(&pkt, src, len, res, NULL);
 		if (res < 0)
 			break;
 
@@ -208,9 +212,8 @@ extract_signatures(PGP_Context *ctx, PullFilter *src, void *opaque,
 				 * We're assuming that there will only ever be a single data
 				 * packet, compressed or otherwise.
 				 */
-				//if (!extract_details)
+				if (!extract_details)
 					done = 1;
-				//elog(INFO, "past data?");
 				break;
 			case PGP_PKT_LITERAL_DATA:
 			case PGP_PKT_MDC:
@@ -263,8 +266,10 @@ read_signatures_from_data(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaq
 	PullFilter *pf_decrypt = NULL;
 	PullFilter *pf_prefix = NULL;
 	PullFilter *pf_mdc = NULL;
+	PullFilter *chain_head;
+	int			need_mdc = (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC);
 
-	if (tag == PGP_PKT_SYMENCRYPTED_DATA_MDC)
+	if (need_mdc)
 	{
 		uint8 ver;
 
@@ -288,11 +293,21 @@ read_signatures_from_data(PGP_Context *ctx, PullFilter *pkt, int tag, void *opaq
 	if (res < 0)
 		goto out;
 
-	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, pf_decrypt);
+	if (need_mdc)
+	{
+		res = pullf_create(&pf_mdc, &pgp_mdc_filter, ctx, pf_decrypt);
+		if (res < 0)
+			goto out;
+		chain_head = pf_mdc;
+	}
+	else
+		chain_head = pf_decrypt;
+
+	res = pullf_create(&pf_prefix, &pgp_prefix_filter, ctx, chain_head);
 	if (res < 0)
 		goto out;
 
-	res = extract_signatures(ctx, pf_prefix, opaque, sig_key_cb, extract_details, 1);
+	res = extract_signatures(ctx, pf_prefix, opaque, sig_key_cb, extract_details, need_mdc, 1);
 
 out:
 	if (pf_prefix)

@@ -204,6 +204,33 @@ select * from pgp_pub_decrypt_verify_bytea((select dearmor(data) from encdata wh
  hello world
 (1 row)
 
+-- test for MDC filter in pgp-info
+insert into encdata(id, data) values (8, '
+-----BEGIN PGP MESSAGE-----
+
+hQEMA/0CBsQJt0h1AQf9Ft3w02xcBLxXvKhlQwpngOr3+yYwvUNf2Cup9eDuk52RR0dQ8A/lAW5Q
+6xvidlsUqpym7dG7l1siiit8xWv4wqlk+Aoyf5AOIa90nptKm9m/s7PPLjySRSy4Upyb/lm4686R
+Yw/DtOMV5Y8CDj1W0KzSy4RJFDh3F5e0wlPfci2fpfjz6j4Ac/XQWyBXz0bEqAhGa7U1slO1Z2af
+0F4fbSu17XG20erPPfusoKjkFfcQTxO34uj5HUQbjKbOgWcTnsdz7OLZFZ3fjEbQqG4YtEwvQ5dC
+XVN2rST6WQRIMMlr95WoX0agI3ykEZ/vy8Sh+Iji5PPM6UOaQqS5Aw1fvdLpAeYo7yNjAaIfx5xH
+b+fhfgGgKjSGQJYv8Dp5b3uXN7o3I0YSGyLDRkAgZD+d+5w75P+oJESYLLzlDrcaJ+0YvDEzbalV
++0vp9cKIGXsQ82FEzAq6RrlRM9HBVwyMMvMAo18py5ruSDckLdLuS05GobtiZvZpV+j+/TSr+GXn
+/1B8XwCE829Ty4PT2GrD9e3oa1yedM17FPDtesMFLlxpVKeP89jWbn1U0gTvp5QFiLINyka5Uh71
+5xsBy8KG7+ZQ1bppvgH8sSos7s8VkbyS5/3C6nWoUN7ylzVh4d2Jb60Nqx+rtHOpdOfH7e+55Dux
+NwU0nNni5msv++QQoKwr5guMQ+j0CofQlW8VA82S/fmYQEyifuCVA/qb0OK4qBN9gne8hePEbplV
+pNcuodLkeBPiRSK2G+zdp0yYEpeMV5C1hxYVMS1ea0BoKMq5n57jwmnnLwJijjUw6CjGodtBF7mT
+aEHeff1OPHgjbFtXojDuPAaN86RTRXqN6HSOrv/V8eW78KoEUENcOVDLvoOYpUlqGdmSp0HGpuDZ
+U1Hp14vpvabDrjZ45VxZKSdLGeywyVkYkV4ZeXXsurbOCGwUzgZBodHcaG1fSF7NBTDPrXNfkr1n
+oDruf0xBGr6adDlBmXWCo6AeKdCfuJJ9s0KUi0LbNaewpuyYiT8t3ziqdjcCnUs=
+=26/O
+-----END PGP MESSAGE-----
+');
+select * from pgp_pub_signatures((select dearmor(data) from encdata where id=8), (select dearmor(seckey) from keytbl where keytbl.name = 'rsaenc2048'), '', TRUE);
+      keyid       | digest | pubkeyalgo |        creation_time         
+------------------+--------+------------+------------------------------
+ 9DCF8E9C9BD31F24 | sha1   | rsa        | Sat Nov 01 03:02:52 2014 PDT
+(1 row)
+
 -- pgp_main_key_id() should fail, even on signed data
 select pgp_main_key_id(pgp_sym_encrypt_sign_bytea('Secret.', 'key', dearmor(seckey)))
 from keytbl where keytbl.name = 'rsa2048';
