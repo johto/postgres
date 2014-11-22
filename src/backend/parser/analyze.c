@@ -2108,27 +2108,28 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 							   origTarget->name, true);
 		if (attrno == InvalidAttrNumber)
 		{
-			const char *relname;
+			const char *targetrefname;
 			const char *message_hint = NULL;
 
 			/*
 			 * Table-qualifying the LHS expression in SET is a common mistake;
 			 * provide a hint if that seems to be the problem.
 			 */
-			relname = RelationGetRelationName(pstate->p_target_relation);
-			if (strcmp(origTarget->name, relname) == 0 &&
-				origTarget->indirection != NIL)
-			{
-				Node *ind = linitial(origTarget->indirection);
-				if (IsA(ind, String))
-					message_hint = "Target column references in UPDATE must not be qualified";
-			}
+			if (target_rte->alias)
+				targetrefname = target_rte->alias->aliasname;
+			else
+				targetrefname = RelationGetRelationName(pstate->p_target_relation);
+
+			if (strcmp(origTarget->name, targetrefname) == 0 &&
+				origTarget->indirection != NIL &&
+				IsA(linitial(origTarget->indirection), String))
+				message_hint = "Target column references in UPDATE must not be qualified";
 
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_COLUMN),
 					 errmsg("column \"%s\" of relation \"%s\" does not exist",
 							origTarget->name,
-						 	relname),
+						 	RelationGetRelationName(pstate->p_target_relation)),
 					 message_hint ? errhint("%s", message_hint) : 0,
 					 parser_errposition(pstate, origTarget->location)));
 		}
