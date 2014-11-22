@@ -93,6 +93,8 @@
 /* declare routines from plperl.c for access by .xs files */
 HV		   *plperl_spi_exec(char *, int);
 void		plperl_return_next(SV *);
+void		plperl_croak_edata(const ErrorData *);
+void		plperl_ereport(int, SV *);
 SV		   *plperl_spi_query(char *);
 SV		   *plperl_spi_fetchrow(char *);
 SV		   *plperl_spi_prepare(char *, int, SV **);

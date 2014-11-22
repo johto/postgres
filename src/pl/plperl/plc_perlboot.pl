@@ -117,3 +117,18 @@ sub ::encode_array_constructor
 
 	1;
 }
+
+{
+
+	package PostgreSQL::InServer::ERROR;
+	use strict;
+	use warnings;
+
+	use overload
+		'""' => \&to_str;
+
+	sub to_str
+	{
+		return shift->{'message'};
+	}
+}

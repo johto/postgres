@@ -63,6 +63,37 @@ do_util_elog(int level, SV *msg)
 	PG_END_TRY();
 }
 
+/*
+ * Implementation of plperl's ereport() function
+ *
+ * This is exactly like elog(), except the second argument is a hash which may
+ * contain of the components of an error.
+ */
+static void
+do_util_ereport(int level, SV *error)
+{
+	MemoryContext oldcontext = CurrentMemoryContext;
+
+	PG_TRY();
+	{
+		plperl_ereport(level, error);
+	}
+	PG_CATCH();
+	{
+		ErrorData  *edata;
+
+		/* Must reset elog.c's state */
+		MemoryContextSwitchTo(oldcontext);
+		edata = CopyErrorData();
+		FlushErrorState();
+
+		/* Punt the error to Perl */
+		plperl_croak_edata(edata);
+	}
+	PG_END_TRY();
+}
+
+
 static text *
 sv2text(SV *sv)
 {
@@ -106,6 +137,17 @@ util_elog(level, msg)
         if (level < DEBUG5)
             level = DEBUG5;
         do_util_elog(level, msg);
+
+void
+util_ereport(level, error)
+    int level
+    SV *error
+    CODE:
+        if (level > ERROR)      /* no PANIC allowed thanks */
+            level = ERROR;
+        if (level < DEBUG5)
+            level = DEBUG5;
+        do_util_ereport(level, error);
 
 SV *
 util_quote_literal(sv)

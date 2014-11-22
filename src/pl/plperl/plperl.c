@@ -2134,9 +2134,11 @@ plperl_call_perl_func(plperl_proc_desc *desc, FunctionCallInfo fcinfo)
 		PUTBACK;
 		FREETMPS;
 		LEAVE;
-		/* XXX need to find a way to assign an errcode here */
-		ereport(ERROR,
-				(errmsg("%s", strip_trailing_ws(sv2cstr(ERRSV)))));
+		if (SvOK(ERRSV) && SvROK(ERRSV) && sv_isa(ERRSV, "PostgreSQL::InServer::ERROR"))
+			plperl_ereport(ERROR, ERRSV);
+		else
+			ereport(ERROR,
+					(errmsg("%s", strip_trailing_ws(sv2cstr(ERRSV)))));
 	}
 
 	retval = newSVsv(POPs);
@@ -3004,7 +3006,7 @@ plperl_spi_exec(char *query, int limit)
 		SPI_restore_connection();
 
 		/* Punt the error to Perl */
-		croak("%s", edata->message);
+		plperl_croak_edata(edata);
 
 		/* Can't get here, but keep compiler quiet */
 		return NULL;
@@ -3013,7 +3015,6 @@ plperl_spi_exec(char *query, int limit)
 
 	return ret_hv;
 }
-
 
 static HV  *
 plperl_spi_execute_fetch_result(SPITupleTable *tuptable, int processed,
@@ -3162,6 +3163,47 @@ plperl_return_next(SV *sv)
 
 	MemoryContextSwitchTo(old_cxt);
 	MemoryContextReset(current_call_data->tmp_cxt);
+}
+
+void
+plperl_croak_edata(const ErrorData *edata)
+{
+	HV *hv;
+
+	hv = newHV();
+	(void) hv_store(hv, "message", 7, newSVpv(edata->message, 0), 0);
+	(void) hv_store(hv, "context", 7, newSVpv(edata->context, 0), 0);
+	(void) hv_store(hv, "hint", 4, newSVpv(edata->hint, 0), 0);
+
+	croak_sv(sv_bless(newRV_noinc((SV *) hv),
+			 gv_stashpv("PostgreSQL::InServer::ERROR", 0)));
+}
+
+void
+plperl_ereport(int level, SV *error)
+{
+	HV *hv;
+	SV **sv;
+	const char *err_message;
+	const char *err_hint = NULL;
+
+	if (!SvOK(error) || !SvROK(error))
+		elog(ERROR, "wtf bro");
+	if (SvTYPE(SvRV(error)) != SVt_PVHV)
+		elog(ERROR, "gimme a hash yo");
+
+	hv = (HV *) SvRV(error);
+	sv = hv_fetch_string(hv, "message");
+	if (sv && *sv && SvOK(*sv))
+		err_message = sv2cstr(*sv);
+	sv = hv_fetch_string(hv, "hint");
+	if (sv && *sv && SvOK(*sv))
+		err_hint = sv2cstr(*sv);
+
+	ereport(level,
+			/* TODO: handle all cases */
+			(errmsg_internal("%s", err_message),
+			 (err_hint != NULL) ? errhint("%s", err_hint) : 0));
 }
 
 
