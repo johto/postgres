@@ -1,0 +1,72 @@
+<!--
+doc/src/sgml/ref/drop_owned.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-DROP-OWNED">
+ <indexterm zone="sql-drop-privileges-owned">
+  <primary>DROP PRIVILEGES OWNED</primary>
+ </indexterm>
+
+ <refmeta>
+  <refentrytitle>DROP PRIVILEGES OWNED</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>DROP PRIVILEGES OWNED</refname>
+  <refpurpose>remove privileges granted to a database role</refpurpose>
+ </refnamediv>
+
+ <refsynopsisdiv>
+<synopsis>
+DROP PRIVILEGES OWNED BY <replaceable class="PARAMETER">name</replaceable> [, ...]
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>DROP PRIVILEGES OWNED</command> revokes all privileges granted to
+   the given roles on objects in the current database and on shared objects
+   (databases, tablespaces).
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><replaceable class="PARAMETER">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of a role whose privileges will be revoked.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   The <command>DROP PRIVILEGES OWNED</command> statement is a
+   <productname>PostgreSQL</productname> extension.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-drop-owned"></member>
+   <member><xref linkend="sql-reassign-owned"></member>
+   <member><xref linkend="sql-droprole"></member>
+  </simplelist>
+ </refsect1>
+
+</refentry>

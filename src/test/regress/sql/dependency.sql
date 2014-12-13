@@ -63,9 +63,14 @@ GRANT ALL ON deptest1 TO regression_user1 WITH GRANT OPTION;
 SET SESSION AUTHORIZATION regression_user1;
 CREATE TABLE deptest (a serial primary key, b text);
 GRANT ALL ON deptest1 TO regression_user2;
+GRANT ALL ON deptest TO regression_user2;
 RESET SESSION AUTHORIZATION;
-\z deptest1
 
+\z deptest
+DROP PRIVILEGES OWNED BY regression_user2;
+\z deptest
+
+\z deptest1
 DROP OWNED BY regression_user1;
 -- all grants revoked
 \z deptest1

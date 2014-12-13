@@ -189,6 +189,7 @@ check_xact_readonly(Node *parsetree)
 		case T_AlterDefaultPrivilegesStmt:
 		case T_TruncateStmt:
 		case T_DropOwnedStmt:
+		case T_DropPrivilegesOwnedStmt:
 		case T_ReassignOwnedStmt:
 		case T_AlterTSDictionaryStmt:
 		case T_AlterTSConfigurationStmt:
@@ -1319,6 +1320,10 @@ ProcessUtilitySlow(Node *parsetree,
 				DropOwnedObjects((DropOwnedStmt *) parsetree);
 				break;
 
+			case T_DropPrivilegesOwnedStmt:
+				DropOwnedPrivileges((DropPrivilegesOwnedStmt *) parsetree);
+				break;
+
 			case T_AlterDefaultPrivilegesStmt:
 				ExecAlterDefaultPrivilegesStmt((AlterDefaultPrivilegesStmt *) parsetree);
 				break;
@@ -2256,6 +2261,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "DROP OWNED";
 			break;
 
+		case T_DropPrivilegesOwnedStmt:
+			tag = "DROP PRIVILEGES OWNED";
+			break;
+
 		case T_ReassignOwnedStmt:
 			tag = "REASSIGN OWNED";
 			break;
@@ -2810,6 +2819,10 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_DropOwnedStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_DropPrivilegesOwnedStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

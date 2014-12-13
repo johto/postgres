@@ -3844,6 +3844,16 @@ _copyDropOwnedStmt(const DropOwnedStmt *from)
 	return newnode;
 }
 
+static DropPrivilegesOwnedStmt *
+_copyDropPrivilegesOwnedStmt(const DropPrivilegesOwnedStmt *from)
+{
+	DropPrivilegesOwnedStmt *newnode = makeNode(DropPrivilegesOwnedStmt);
+
+	COPY_NODE_FIELD(roles);
+
+	return newnode;
+}
+
 static ReassignOwnedStmt *
 _copyReassignOwnedStmt(const ReassignOwnedStmt *from)
 {
@@ -4615,6 +4625,9 @@ copyObject(const void *from)
 			break;
 		case T_DropOwnedStmt:
 			retval = _copyDropOwnedStmt(from);
+			break;
+		case T_DropPrivilegesOwnedStmt:
+			retval = _copyDropPrivilegesOwnedStmt(from);
 			break;
 		case T_ReassignOwnedStmt:
 			retval = _copyReassignOwnedStmt(from);

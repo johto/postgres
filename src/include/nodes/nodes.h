@@ -342,6 +342,7 @@ typedef enum NodeTag
 	T_AlterObjectSchemaStmt,
 	T_AlterOwnerStmt,
 	T_DropOwnedStmt,
+	T_DropPrivilegesOwnedStmt,
 	T_ReassignOwnedStmt,
 	T_CompositeTypeStmt,
 	T_CreateEnumStmt,

@@ -1308,7 +1308,33 @@ DropOwnedObjects(DropOwnedStmt *stmt)
 	}
 
 	/* Ok, do it */
-	shdepDropOwned(role_ids, stmt->behavior);
+	shdepDropOwned(role_ids, stmt->behavior, false);
+}
+
+/*
+ * DropOwnedPrivileges
+ *
+ * Revoke privileges granted to a given list of roles.
+ */
+void
+DropOwnedPrivileges(DropPrivilegesOwnedStmt *stmt)
+{
+	List	   *role_ids = roleNamesToIds(stmt->roles);
+	ListCell   *cell;
+
+	/* Check privileges */
+	foreach(cell, role_ids)
+	{
+		Oid			roleid = lfirst_oid(cell);
+
+		if (!has_privs_of_role(GetUserId(), roleid))
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("permission denied to drop privileges")));
+	}
+
+	/* Ok, do it */
+	shdepDropOwned(role_ids, DROP_RESTRICT, true);
 }
 
 /*

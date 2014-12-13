@@ -1978,6 +1978,14 @@ _equalDropOwnedStmt(const DropOwnedStmt *a, const DropOwnedStmt *b)
 }
 
 static bool
+_equalDropPrivilegesOwnedStmt(const DropPrivilegesOwnedStmt *a, const DropPrivilegesOwnedStmt *b)
+{
+	COMPARE_NODE_FIELD(roles);
+
+	return true;
+}
+
+static bool
 _equalReassignOwnedStmt(const ReassignOwnedStmt *a, const ReassignOwnedStmt *b)
 {
 	COMPARE_NODE_FIELD(roles);
@@ -3042,6 +3050,9 @@ equal(const void *a, const void *b)
 			break;
 		case T_DropOwnedStmt:
 			retval = _equalDropOwnedStmt(a, b);
+			break;
+		case T_DropPrivilegesOwnedStmt:
+			retval = _equalDropPrivilegesOwnedStmt(a, b);
 			break;
 		case T_ReassignOwnedStmt:
 			retval = _equalReassignOwnedStmt(a, b);

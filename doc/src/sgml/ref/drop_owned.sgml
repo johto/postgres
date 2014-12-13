@@ -111,6 +111,7 @@ DROP OWNED BY <replaceable class="PARAMETER">name</replaceable> [, ...] [ CASCAD
   <title>See Also</title>
 
   <simplelist type="inline">
+   <member><xref linkend="sql-drop-privileges-owned"></member>
    <member><xref linkend="sql-reassign-owned"></member>
    <member><xref linkend="sql-droprole"></member>
   </simplelist>

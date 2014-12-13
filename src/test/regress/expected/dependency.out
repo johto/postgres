@@ -61,7 +61,24 @@ GRANT ALL ON deptest1 TO regression_user1 WITH GRANT OPTION;
 SET SESSION AUTHORIZATION regression_user1;
 CREATE TABLE deptest (a serial primary key, b text);
 GRANT ALL ON deptest1 TO regression_user2;
+GRANT ALL ON deptest TO regression_user2;
 RESET SESSION AUTHORIZATION;
+\z deptest
+                                          Access privileges
+ Schema |  Name   | Type  |             Access privileges             | Column privileges | Policies 
+--------+---------+-------+-------------------------------------------+-------------------+----------
+ public | deptest | table | regression_user1=arwdDxt/regression_user1+|                   | 
+        |         |       | regression_user2=arwdDxt/regression_user1 |                   | 
+(1 row)
+
+DROP PRIVILEGES OWNED BY regression_user2;
+\z deptest
+                                          Access privileges
+ Schema |  Name   | Type  |             Access privileges             | Column privileges | Policies 
+--------+---------+-------+-------------------------------------------+-------------------+----------
+ public | deptest | table | regression_user1=arwdDxt/regression_user1 |                   | 
+(1 row)
+
 \z deptest1
                                               Access privileges
  Schema |   Name   | Type  |                Access privileges                 | Column privileges | Policies 

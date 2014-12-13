@@ -2816,6 +2816,15 @@ typedef struct DropOwnedStmt
 } DropOwnedStmt;
 
 /*
+ *		DROP PRIVILEGES OWNED statement
+ */
+typedef struct DropPrivilegesOwnedStmt
+{
+	NodeTag		type;
+	List	   *roles;
+} DropPrivilegesOwnedStmt;
+
+/*
  *		REASSIGN OWNED statement
  */
 typedef struct ReassignOwnedStmt

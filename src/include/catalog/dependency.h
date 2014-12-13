@@ -255,7 +255,7 @@ extern void copyTemplateDependencies(Oid templateDbId, Oid newDbId);
 
 extern void dropDatabaseDependencies(Oid databaseId);
 
-extern void shdepDropOwned(List *relids, DropBehavior behavior);
+extern void shdepDropOwned(List *relids, DropBehavior behavior, bool privilegesOnly);
 
 extern void shdepReassignOwned(List *relids, Oid newrole);
 

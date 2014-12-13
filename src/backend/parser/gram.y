@@ -256,7 +256,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		VariableResetStmt VariableSetStmt VariableShowStmt
 		ViewStmt CheckPointStmt CreateConversionStmt
 		DeallocateStmt PrepareStmt ExecuteStmt
-		DropOwnedStmt ReassignOwnedStmt
+		DropOwnedStmt DropPrivilegesOwnedStmt ReassignOwnedStmt
 		AlterTSConfigurationStmt AlterTSDictionaryStmt
 		CreateMatViewStmt RefreshMatViewStmt
 
@@ -807,6 +807,7 @@ stmt :
 			| DropOpFamilyStmt
 			| DropOwnedStmt
 			| DropPolicyStmt
+			| DropPrivilegesOwnedStmt
 			| DropPLangStmt
 			| DropRuleStmt
 			| DropStmt
@@ -5389,6 +5390,7 @@ DropOpFamilyStmt:
  *		QUERY:
  *
  *		DROP OWNED BY username [, username ...] [ RESTRICT | CASCADE ]
+ *		DROP PRIVILEGES OWNED BY username [, username ...]
  *		REASSIGN OWNED BY username [, username ...] TO username
  *
  *****************************************************************************/
@@ -5398,6 +5400,15 @@ DropOwnedStmt:
 					DropOwnedStmt *n = makeNode(DropOwnedStmt);
 					n->roles = $4;
 					n->behavior = $5;
+					$$ = (Node *)n;
+				}
+			;
+
+DropPrivilegesOwnedStmt:
+			DROP PRIVILEGES OWNED BY role_list
+				{
+					DropPrivilegesOwnedStmt *n = makeNode(DropPrivilegesOwnedStmt);
+					n->roles = $5;
 					$$ = (Node *)n;
 				}
 		;

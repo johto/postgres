@@ -1162,13 +1162,14 @@ isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel)
  * interdependent objects in the wrong order.
  */
 void
-shdepDropOwned(List *roleids, DropBehavior behavior)
+shdepDropOwned(List *roleids, DropBehavior behavior, bool privilegesOnly)
 {
 	Relation	sdepRel;
 	ListCell   *cell;
-	ObjectAddresses *deleteobjs;
+	ObjectAddresses *deleteobjs = NULL;
 
-	deleteobjs = new_object_addresses();
+	if (!privilegesOnly)
+		deleteobjs = new_object_addresses();
 
 	/*
 	 * We don't need this strong a lock here, but we'll call routines that
@@ -1243,7 +1244,7 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 					break;
 				case SHARED_DEPENDENCY_OWNER:
 					/* If a local object, save it for deletion below */
-					if (sdepForm->dbid == MyDatabaseId)
+					if (!privilegesOnly && sdepForm->dbid == MyDatabaseId)
 					{
 						obj.classId = sdepForm->classid;
 						obj.objectId = sdepForm->objid;
@@ -1257,12 +1258,17 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 		systable_endscan(scan);
 	}
 
-	/* the dependency mechanism does the actual work */
-	performMultipleDeletions(deleteobjs, behavior, 0);
+	/*
+	 * Unless we were only asked to drop privileges, the dependency mechanism
+	 * does the actual work of dropping the objects.
+	 */
+	if (!privilegesOnly)
+		performMultipleDeletions(deleteobjs, behavior, 0);
 
 	heap_close(sdepRel, RowExclusiveLock);
 
-	free_object_addresses(deleteobjs);
+	if (deleteobjs)
+		free_object_addresses(deleteobjs);
 }
 
 /*
