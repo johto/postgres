@@ -1259,8 +1259,8 @@ shdepDropOwned(List *roleids, DropBehavior behavior, bool privilegesOnly)
 	}
 
 	/*
-	 * Unless we were only asked to drop privileges, the dependency mechanism
-	 * does the actual work of dropping the objects.
+	 * Unless we were asked not to drop objects, now is the time to let the
+	 * dependency mechanism do the actual work of dropping them.
 	 */
 	if (!privilegesOnly)
 		performMultipleDeletions(deleteobjs, behavior, 0);
