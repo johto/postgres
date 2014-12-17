@@ -4193,3 +4193,29 @@ select outer_outer_func(20);
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+
+
+--  DEBUG DEBUG DEB    DEBUG DEBUG DEBUG  DEBUG DEBUG DEB    DEBUG       DEBUG    BUG DEBUG D
+--  DEBUG DEBUG DEBUG  DEBUG DEBUG DEBUG  DEBUG DEBUG DEBUG  DEBUG       DEBUG   EBUG DEBUG DEB
+--  DEBUG       DEBUG  DEBUG              DEBUG       DEBUG  DEBUG       DEBUG  DEBUG         BUG
+--  DEBUG       DEBUG  DEBUG DEBUG DEBUG  DEBUG DEBUG DEB    DEBUG       DEBUG  DEBUG    UG 
+--  DEBUG       DEBUG  DEBUG DEBUG DEBUG  DEBUG DEBUG DEB    DEBUG       DEBUG  DEBUG   BUG DEB
+--  DEBUG       DEBUG  DEBUG              DEBUG       DEBUG  DEBUG       DEBUG   EBUG       DEBU
+--  DEBUG DEBUG DEB    DEBUG DEBUG DEBUG  DEBUG DEBUG DEBUG  DEBUG DEBUG DEBUG    BUG DEBUG DEBUG
+--  DEBUG DEBUG        DEBUG DEBUG DEBUG  DEBUG DEBUG DEB    DEBUG DEBUG DEBUG     UG DEBUG DEBUG
+
+
+-- test that debug assertions are not caught by OTHERS
+create function debug_assertion_test() returns int as $$
+declare r record;
+begin
+	raise exception debug_assertion using message = 'this is the expected message';
+exception when others then
+	-- should never execute
+	raise exception 'caught!';
+end;
+$$ language plpgsql;
+
+select debug_assertion_test();
+
+drop function debug_assertion_test();

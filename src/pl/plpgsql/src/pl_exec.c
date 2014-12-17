@@ -1015,10 +1015,15 @@ exception_matches_conditions(ErrorData *edata, PLpgSQL_condition *cond)
 		/*
 		 * OTHERS matches everything *except* query-canceled; if you're
 		 * foolish enough, you can match that explicitly.
+		 *
+		 * We also let debug_assertion through, since it's supposed to be
+		 * obvious that something's very broken, no matter how deep it is in
+		 * the call stack.
 		 */
 		if (sqlerrstate == 0)
 		{
-			if (edata->sqlerrcode != ERRCODE_QUERY_CANCELED)
+			if (edata->sqlerrcode != ERRCODE_QUERY_CANCELED &&
+				edata->sqlerrcode != ERRCODE_DEBUG_ASSERTION)
 				return true;
 		}
 		/* Exact match? */
