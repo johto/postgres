@@ -784,7 +784,8 @@ SPI_fnumber(TupleDesc tupdesc, const char *fname)
 	int			res;
 	Form_pg_attribute sysatt;
 
-	for (res = 0; res < tupdesc->natts; res++)
+	//for (res = 0; res < tupdesc->natts; res++)
+	for (res = tupdesc->natts - 1; res >= 0; res--)
 	{
 		if (namestrcmp(&tupdesc->attrs[res]->attname, fname) == 0)
 			return res + 1;
