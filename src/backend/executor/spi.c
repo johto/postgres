@@ -782,14 +782,31 @@ int
 SPI_fnumber(TupleDesc tupdesc, const char *fname)
 {
 	int			res;
+	int			found1, found2;
 	Form_pg_attribute sysatt;
 
-	//for (res = 0; res < tupdesc->natts; res++)
+	/* my little special sauce */
+	found1 = found2 = -1;
+	for (res = 0; res < tupdesc->natts; res++)
+	{
+		if (namestrcmp(&tupdesc->attrs[res]->attname, fname) == 0)
+		{
+			found1 = res + 1;
+			break;
+		}
+	}
 	for (res = tupdesc->natts - 1; res >= 0; res--)
 	{
 		if (namestrcmp(&tupdesc->attrs[res]->attname, fname) == 0)
-			return res + 1;
+		{
+			found2 = res + 1;
+			break;
+		}
 	}
+	if (found1 != found2)
+		elog(FATAL, "attribute %s found twice: %d / %d", fname, found1, found2);
+	else if (found1 != -1)
+		return found1;
 
 	sysatt = SystemAttributeByName(fname, true /* "oid" will be accepted */ );
 	if (sysatt != NULL)
