@@ -125,6 +125,7 @@ typedef struct _psqlSettings
 	PSQL_ERROR_ROLLBACK on_error_rollback;
 	PSQL_COMP_CASE comp_case;
 	HistControl histcontrol;
+	bool		save_interrupted_buffer;
 	const char *prompt1;
 	const char *prompt2;
 	const char *prompt3;

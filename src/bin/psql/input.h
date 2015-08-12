@@ -46,6 +46,7 @@ void		initializeInput(int flags);
 bool		printHistory(const char *fname, unsigned short int pager);
 
 void		pg_append_history(const char *s, PQExpBuffer history_buf);
+void		pg_save_unfinished_buffer(PQExpBuffer history_buf);
 void		pg_send_history(PQExpBuffer history_buf);
 
 #endif   /* INPUT_H */

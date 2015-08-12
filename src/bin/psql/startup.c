@@ -829,6 +829,12 @@ histcontrol_hook(const char *newval)
 }
 
 static void
+save_interrupted_buffer_hook(const char *newval)
+{
+	pset.save_interrupted_buffer = ParseVariableBool(newval, "SAVE_INTERRUPTED_BUFFER");
+}
+
+static void
 prompt1_hook(const char *newval)
 {
 	pset.prompt1 = newval ? newval : "";
@@ -885,6 +891,7 @@ EstablishVariableSpace(void)
 	SetVariableAssignHook(pset.vars, "ON_ERROR_ROLLBACK", on_error_rollback_hook);
 	SetVariableAssignHook(pset.vars, "COMP_KEYWORD_CASE", comp_keyword_case_hook);
 	SetVariableAssignHook(pset.vars, "HISTCONTROL", histcontrol_hook);
+	SetVariableAssignHook(pset.vars, "SAVE_INTERRUPTED_BUFFER", save_interrupted_buffer_hook);
 	SetVariableAssignHook(pset.vars, "PROMPT1", prompt1_hook);
 	SetVariableAssignHook(pset.vars, "PROMPT2", prompt2_hook);
 	SetVariableAssignHook(pset.vars, "PROMPT3", prompt3_hook);

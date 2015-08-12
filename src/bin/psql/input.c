@@ -100,6 +100,26 @@ pg_append_history(const char *s, PQExpBuffer history_buf)
 #endif
 }
 
+/*
+ * Emit the current unfinished buffer into the command history.
+ */
+void
+pg_save_unfinished_buffer(PQExpBuffer history_buf)
+{
+#ifdef USE_READLINE
+	const char *data;
+
+	if (!useHistory || !useReadline)
+		return;
+
+	pg_append_history(rl_line_buffer, history_buf);
+	data = history_buf->data;
+	/* skip if the buffer is entirely whitespace */
+	if (data[strspn(data, " \r\n\t")] != '\0')
+		pg_send_history(history_buf);
+#endif
+}
+
 
 /*
  * Emit accumulated history entry to readline's history mechanism,

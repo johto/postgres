@@ -102,6 +102,9 @@ MainLoop(FILE *source)
 		if (sigsetjmp(sigint_interrupt_jmp, 1) != 0)
 		{
 			/* got here with longjmp */
+			
+			if (pset.save_interrupted_buffer)
+				pg_save_unfinished_buffer(history_buf);
 
 			/* reset parsing state */
 			psql_scan_finish(scan_state);
