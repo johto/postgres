@@ -2108,29 +2108,27 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 							   origTarget->name, true);
 		if (attrno == InvalidAttrNumber)
 		{
-			const char *targetrefname;
-			const char *message_hint = NULL;
+			bool need_hint = false;
 
 			/*
 			 * Table-qualifying the LHS expression in SET is a common mistake;
 			 * provide a hint if that seems to be the problem.
 			 */
-			if (target_rte->alias)
-				targetrefname = target_rte->alias->aliasname;
-			else
-				targetrefname = RelationGetRelationName(pstate->p_target_relation);
-
-			if (strcmp(origTarget->name, targetrefname) == 0 &&
-				origTarget->indirection != NIL &&
+			if (origTarget->indirection != NIL &&
 				IsA(linitial(origTarget->indirection), String))
-				message_hint = "Target column references in UPDATE must not be qualified";
+			{
+				if (strcmp(origTarget->name, RelationGetRelationName(pstate->p_target_relation)) == 0)
+					need_hint = true;
+				else if (target_rte->alias && strcmp(origTarget->name, target_rte->alias->aliasname) == 0)
+					need_hint = true;
+			}
 
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_COLUMN),
 					 errmsg("column \"%s\" of relation \"%s\" does not exist",
 							origTarget->name,
 						 	RelationGetRelationName(pstate->p_target_relation)),
-					 message_hint ? errhint("%s", message_hint) : 0,
+					 need_hint ? errhint("Do not qualify an UPDATE target column with the name of the table.") : 0,
 					 parser_errposition(pstate, origTarget->location)));
 		}
 
