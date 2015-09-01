@@ -596,6 +596,7 @@ typedef struct
 	int			lineno;
 	PLpgSQL_expr *expr;
 	int			retvarno;
+	List	   *multi_expr;
 } PLpgSQL_stmt_return;
 
 typedef struct

@@ -3039,6 +3039,7 @@ make_return_stmt(int location)
 	new->lineno   = plpgsql_location_to_lineno(location);
 	new->expr	  = NULL;
 	new->retvarno = -1;
+	new->multi_expr = NIL;
 
 	if (plpgsql_curr_compile->fn_retset)
 	{
@@ -3051,12 +3052,48 @@ make_return_stmt(int location)
 	}
 	else if (plpgsql_curr_compile->out_param_varno >= 0)
 	{
-		if (yylex() != ';')
-			ereport(ERROR,
-					(errcode(ERRCODE_DATATYPE_MISMATCH),
-					 errmsg("RETURN cannot have a parameter in function with OUT parameters"),
-					 parser_errposition(yylloc)));
-		new->retvarno = plpgsql_curr_compile->out_param_varno;
+		int tok = yylex();
+
+		if (tok == ';')
+			new->retvarno = plpgsql_curr_compile->out_param_varno;
+		else if (tok == T_DATUM && plpgsql_peek() == ';' &&
+			(yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_ROW ||
+			 yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_REC))
+		{
+			new->retvarno = yylval.wdatum.datum->dno;
+			/* eat the semicolon token that we only peeked at above */
+			tok = yylex();
+			Assert(tok == ';');
+		}
+		else
+		{
+			List *multi_expr = NIL;
+
+			/* a full list of expressions */
+
+			plpgsql_push_back_token(tok);
+
+			for (;;)
+			{
+				PLpgSQL_expr *expr;
+				int tok;
+
+				expr = read_sql_expression2(';', ',', "comma or semicolon", &tok);
+				multi_expr = lappend(multi_expr, expr);
+				if (tok == ';')
+					break;
+			}
+
+			Assert(list_length(multi_expr) > 0);
+			/*
+			 * If we still end up with just a single expression, throw the list
+			 * away to save some cycles.
+			 */
+			if (list_length(multi_expr) == 1)
+				new->expr = linitial(multi_expr);
+			else
+				new->multi_expr = multi_expr;
+		}
 	}
 	else if (plpgsql_curr_compile->fn_rettype == VOIDOID)
 	{

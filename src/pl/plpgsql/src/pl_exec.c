@@ -2519,6 +2519,39 @@ exec_stmt_return(PLpgSQL_execstate *estate, PLpgSQL_stmt_return *stmt)
 	estate->retisnull = true;
 	estate->rettype = InvalidOid;
 
+	if (stmt->multi_expr != NIL)
+	{
+		ListCell *lc;
+		int i;
+		int num_vars;
+
+		Assert(estate->func->out_param_varno >= 0);
+
+		PLpgSQL_row *out = (PLpgSQL_row *) estate->func->datums[estate->func->out_param_varno];
+		num_vars = out->nfields;
+		if (out->nfields != list_length(stmt->multi_expr))
+			elog(ERROR, "OUT nfields %d != multi_expr length %d", out->nfields, list_length(stmt->multi_expr));
+
+		lc = list_head(stmt->multi_expr);
+		for (i = 0; i < num_vars; i++)
+		{
+			PLpgSQL_expr *expr;
+			PLpgSQL_datum *target;
+
+			if (!lc)
+				elog(ERROR, "WTF");
+
+			expr = (PLpgSQL_expr *) lfirst(lc);
+			target = estate->datums[out->varnos[i]];
+			exec_assign_expr(estate, target, expr);
+
+			lc = lnext(lc);
+		}
+
+		/* let the code below handle the thingie */
+		stmt->retvarno = estate->func->out_param_varno;
+	}
+
 	/*
 	 * Special case path when the RETURN expression is a simple variable
 	 * reference; in particular, this path is always taken in functions with
