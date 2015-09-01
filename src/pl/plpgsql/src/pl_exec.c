@@ -1156,12 +1156,6 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 											  true,
 											  UNKNOWNOID,
 											  -1);
-
-						if (var->notnull)
-							ereport(ERROR,
-									(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-									 errmsg("variable \"%s\" declared NOT NULL cannot default to NULL",
-											var->refname)));
 					}
 					else
 					{
@@ -4710,6 +4704,12 @@ exec_eval_datum(PLpgSQL_execstate *estate,
 			{
 				PLpgSQL_var *var = (PLpgSQL_var *) datum;
 
+				if (var->notnull && var->isnull)
+					ereport(ERROR,
+							(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+							 errmsg("variable \"%s\" declared NOT NULL is unassigned",
+							 var->refname)));
+
 				*typeid = var->datatype->typoid;
 				*typetypmod = var->datatype->atttypmod;
 				*value = var->value;
@@ -5675,6 +5675,12 @@ setup_unshared_param_list(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 			{
 				PLpgSQL_var *var = (PLpgSQL_var *) datum;
 				ParamExternData *prm = &paramLI->params[dno];
+
+				if (var->notnull && var->isnull)
+					ereport(ERROR,
+							(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+							 errmsg("variable \"%s\" declared NOT NULL is unassigned",
+							 var->refname)));
 
 				if (dno == expr->rwparam)
 					prm->value = var->value;
@@ -7023,7 +7029,10 @@ assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var,
 											var->datatype->typlen);
 	prm->isnull = isnull;
 	/* these might be set already, but let's be sure */
-	prm->pflags = PARAM_FLAG_CONST;
+	if (var->notnull)
+		prm->pflags = PARAM_FLAG_CONST | PARAM_FLAG_UNASSIGNED;
+	else
+		prm->pflags = PARAM_FLAG_CONST;
 	prm->ptype = var->datatype->typoid;
 }
 
