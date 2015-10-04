@@ -46,6 +46,7 @@
 #include "postgres.h"
 
 #ifdef USE_LIBXML
+
 #include <libxml/chvalid.h>
 #include <libxml/parser.h>
 #include <libxml/parserInternals.h>
@@ -56,6 +57,10 @@
 #include <libxml/xmlwriter.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
+
+#ifdef LIBXML_SCHEMAS_ENABLED
+#include <libxml/xmlschemastypes.h>
+#endif
 
 /*
  * We used to check for xmlStructuredErrorContext via a configure test; but
@@ -4068,6 +4073,25 @@ xml_is_well_formed_content(PG_FUNCTION_ARGS)
 	text	   *data = PG_GETARG_TEXT_P(0);
 
 	PG_RETURN_BOOL(wellformed_xml(data, XMLOPTION_CONTENT));
+#else
+	NO_XML_SUPPORT();
+	return 0;
+#endif   /* not USE_LIBXML */
+}
+
+Datum
+
+{
+#ifdef USE_LIBXML
+#ifdef LIBXML_SCHEMAS_ENABLED
+#else
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("unsupported XML feature"),
+			 errdetail("This functionality requires the server to be built with libxml support."),
+			 errhint("You need to rebuild PostgreSQL using --with-libxml.")));
+
+#endif   /* not LIBXML_SCHEMAS_ENABLED */
 #else
 	NO_XML_SUPPORT();
 	return 0;
