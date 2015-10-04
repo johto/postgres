@@ -1737,6 +1737,7 @@ alter table anothertab alter column atcol1 type boolean
         using case when atcol1 % 2 = 0 then true else false end; -- fails
 ERROR:  operator does not exist: boolean <= integer
 HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+CONTEXT:  while rebuilding constraint anothertab_chk
 alter table anothertab drop constraint anothertab_chk;
 alter table anothertab drop constraint anothertab_chk; -- fails
 ERROR:  constraint "anothertab_chk" of relation "anothertab" does not exist

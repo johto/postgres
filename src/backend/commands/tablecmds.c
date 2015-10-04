@@ -82,6 +82,7 @@
 #include "storage/smgr.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -309,6 +310,7 @@ static void ATController(AlterTableStmt *parsetree,
 			 Relation rel, List *cmds, bool recurse, LOCKMODE lockmode);
 static void ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		  bool recurse, bool recursing, LOCKMODE lockmode);
+static void ATRewriteSubcommandErrorCallback(void *arg);
 static void ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode);
 static void ATExecCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		  AlterTableCmd *cmd, LOCKMODE lockmode);
@@ -3373,6 +3375,25 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 	tab->subcmds[pass] = lappend(tab->subcmds[pass], cmd);
 }
 
+static void
+ATRewriteSubcommandErrorCallback(void *arg)
+{
+	AlterTableCmd *subcmd = (AlterTableCmd *) arg;
+	
+	switch (subcmd->subtype)
+	{
+		case AT_ReAddIndex:
+			errcontext("while rebuilding index %s", subcmd->name);
+			break;
+		case AT_ReAddConstraint:
+			errcontext("while rebuilding constraint %s", subcmd->name);
+			break;
+		default:
+			/* keep compiler quiet */
+			(void) 0;
+	}
+}
+
 /*
  * ATRewriteCatalogs
  *
@@ -3402,6 +3423,7 @@ ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode)
 			List	   *subcmds = tab->subcmds[pass];
 			Relation	rel;
 			ListCell   *lcmd;
+			ErrorContextCallback errcallback;
 
 			if (subcmds == NIL)
 				continue;
@@ -3411,8 +3433,19 @@ ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode)
 			 */
 			rel = relation_open(tab->relid, NoLock);
 
+			errcallback.callback = ATRewriteSubcommandErrorCallback;
+			errcallback.previous = error_context_stack;
+			error_context_stack = &errcallback;
+
 			foreach(lcmd, subcmds)
-				ATExecCmd(wqueue, tab, rel, (AlterTableCmd *) lfirst(lcmd), lockmode);
+			{
+				AlterTableCmd *subcmd = (AlterTableCmd *) lfirst(lcmd);
+
+				errcallback.arg = subcmd;
+				ATExecCmd(wqueue, tab, rel, subcmd, lockmode);
+			}
+
+			error_context_stack = errcallback.previous;
 
 			/*
 			 * After the ALTER TYPE pass, do cleanup work (this is not done in
@@ -8682,6 +8715,7 @@ ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, char *cmd,
 
 			newcmd = makeNode(AlterTableCmd);
 			newcmd->subtype = AT_ReAddIndex;
+			newcmd->name = stmt->idxname;
 			newcmd->def = (Node *) stmt;
 			tab->subcmds[AT_PASS_OLD_INDEX] =
 				lappend(tab->subcmds[AT_PASS_OLD_INDEX], newcmd);
@@ -8712,6 +8746,7 @@ ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, char *cmd,
 													 RelationRelationId, 0);
 
 					cmd->subtype = AT_ReAddIndex;
+					cmd->name = indstmt->idxname;
 					tab->subcmds[AT_PASS_OLD_INDEX] =
 						lappend(tab->subcmds[AT_PASS_OLD_INDEX], cmd);
 
@@ -8734,6 +8769,7 @@ ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, char *cmd,
 						!rewrite && tab->rewrite == 0)
 						TryReuseForeignKey(oldId, con);
 					cmd->subtype = AT_ReAddConstraint;
+					cmd->name = con->conname;
 					tab->subcmds[AT_PASS_OLD_CONSTR] =
 						lappend(tab->subcmds[AT_PASS_OLD_CONSTR], cmd);
 
