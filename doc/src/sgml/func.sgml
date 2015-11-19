@@ -782,6 +782,19 @@
       <row>
        <entry>
         <indexterm>
+         <primary>numeric_trim</primary>
+        </indexterm>
+        <literal><function>numeric_trim(<type>numeric</type>)</function></literal>
+       </entry>
+       <entry><type>numeric</type></entry>
+       <entry>remove trailing decimal zeroes after the decimal point</entry>
+       <entry><literal>numeric_trim(8.4100)</literal></entry>
+       <entry><literal>8.41</literal></entry>
+      </row>
+
+      <row>
+       <entry>
+        <indexterm>
          <primary>pi</primary>
         </indexterm>
         <literal><function>pi()</function></literal>

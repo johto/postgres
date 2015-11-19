@@ -2825,6 +2825,80 @@ numeric_power(PG_FUNCTION_ARGS)
 	PG_RETURN_NUMERIC(res);
 }
 
+/*
+ * numeric_trim() -
+ *
+ *	Remove trailing decimal zeroes after the decimal point
+ */
+Datum
+numeric_trim(PG_FUNCTION_ARGS)
+{
+	Numeric		num = PG_GETARG_NUMERIC(0);
+	NumericVar	arg;
+	Numeric		res;
+	int dscale;
+	int ndigits;
+
+	if (NUMERIC_IS_NAN(num))
+		PG_RETURN_NUMERIC(make_result(&const_nan));
+
+	init_var_from_num(num, &arg);
+
+	ndigits = arg.ndigits;
+	/* for simplicity in the loop below, do full NBASE digits at a time */
+	dscale = ((arg.dscale + DEC_DIGITS - 1) / DEC_DIGITS) * DEC_DIGITS;
+	/* trim unstored significant trailing zeroes right away */
+	if (dscale > (ndigits - arg.weight - 1) * DEC_DIGITS)
+		dscale = (ndigits - arg.weight - 1) * DEC_DIGITS;
+	while (dscale > 0 && ndigits > 0)
+	{
+		NumericDigit dig = arg.digits[ndigits - 1];
+
+#if DEC_DIGITS == 4
+		if ((dig % 10) != 0)
+			break;
+		if (--dscale == 0)
+			break;
+		if ((dig % 100) != 0)
+			break;
+		if (--dscale == 0)
+			break;
+		if ((dig % 1000) != 0)
+			break;
+		if (--dscale == 0)
+			break;
+#elif DEC_DIGITS == 2
+		if ((dig % 10) != 0)
+			break;
+		if (--dscale == 0)
+			break;
+#elif DEC_DIGITS == 1
+		/* nothing to do */
+#else
+#error unsupported NBASE
+#endif
+		if (dig != 0)
+			break;
+		--dscale;
+		--ndigits;
+	}
+	arg.dscale = dscale;
+	arg.ndigits = ndigits;
+
+	/* If it's zero, normalize the sign and weight */
+	if (ndigits == 0)
+	{
+		arg.sign = NUMERIC_POS;
+		arg.weight = 0;
+		arg.dscale = 0;
+	}
+
+	res = make_result(&arg);
+	free_var(&arg);
+
+	PG_RETURN_NUMERIC(res);
+}
+
 
 /* ----------------------------------------------------------------------
  *

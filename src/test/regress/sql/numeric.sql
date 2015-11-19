@@ -983,3 +983,35 @@ select log(1.23e-89, 6.4689e45);
 select log(0.99923, 4.58934e34);
 select log(1.000016, 8.452010e18);
 select log(3.1954752e47, 9.4792021e-73);
+
+
+--
+-- Tests for numeric_trim()
+--
+
+select numeric_trim('NaN');
+select numeric_trim('0');
+select numeric_trim('0.0');
+select numeric_trim('0.0000000000000000000000');
+select numeric_trim('1.0');
+select numeric_trim('1.00');
+select numeric_trim('1.00000');
+select numeric_trim('1.1');
+select numeric_trim('1.11');
+select numeric_trim('1.111');
+select numeric_trim('1.1111');
+select numeric_trim('1.11111');
+select numeric_trim('1.010');
+select numeric_trim('1.0010');
+select numeric_trim('1.00010');
+select numeric_trim('1.000010');
+select numeric_trim('1.00001000000');
+select numeric_trim('1.001000000');
+select numeric_trim('5124124800.10');
+select numeric_trim('5124124800.010');
+select numeric_trim('5124124800.0010');
+select numeric_trim('5124124800.00010');
+select numeric_trim('5124124800.000010');
+select numeric_trim('5124124800.0000010');
+select numeric_trim('5124124800.00000100000000000');
+select numeric_trim('5124124800.00100000000000');
