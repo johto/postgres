@@ -8543,6 +8543,12 @@ ListenStmt: LISTEN ColId
 					n->conditionname = $2;
 					$$ = (Node *)n;
 				}
+			| LISTEN '*'
+				{
+					ListenStmt *n = makeNode(ListenStmt);
+					n->conditionname = NULL;
+					$$ = (Node *)n;
+				}
 		;
 
 UnlistenStmt:

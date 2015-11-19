@@ -294,6 +294,11 @@ static SlruCtlData AsyncCtlData;
 static List *listenChannels = NIL;		/* list of C strings */
 
 /*
+ * If listenWildcard is set, we're listening on all channels.
+ */
+static bool listenWildcard = false;
+
+/*
  * State for pending LISTEN/UNLISTEN actions consists of an ordered list of
  * all actions requested in the current transaction.  As explained above,
  * we don't actually change listenChannels until we reach transaction commit.
@@ -306,6 +311,7 @@ static List *listenChannels = NIL;		/* list of C strings */
 typedef enum
 {
 	LISTEN_LISTEN,
+	LISTEN_LISTEN_ALL,
 	LISTEN_UNLISTEN,
 	LISTEN_UNLISTEN_ALL
 } ListenActionKind;
@@ -373,6 +379,7 @@ static void queue_listen(ListenActionKind action, const char *channel);
 static void Async_UnlistenOnExit(int code, Datum arg);
 static void Exec_ListenPreCommit(void);
 static void Exec_ListenCommit(const char *channel);
+static void Exec_ListenAllCommit(void);
 static void Exec_UnlistenCommit(const char *channel);
 static void Exec_UnlistenAllCommit(void);
 static bool IsListeningOn(const char *channel);
@@ -598,7 +605,7 @@ Async_Notify(const char *channel, const char *payload)
 
 /*
  * queue_listen
- *		Common code for listen, unlisten, unlisten all commands.
+ *		Common code for listen, listen all, unlisten, unlisten all commands.
  *
  *		Adds the request to the list of pending actions.
  *		Actual update of the listenChannels list happens during transaction
@@ -613,8 +620,8 @@ queue_listen(ListenActionKind action, const char *channel)
 	/*
 	 * Unlike Async_Notify, we don't try to collapse out duplicates. It would
 	 * be too complicated to ensure we get the right interactions of
-	 * conflicting LISTEN/UNLISTEN/UNLISTEN_ALL, and it's unlikely that there
-	 * would be any performance benefit anyway in sane applications.
+	 * conflicting LISTEN/LISTEN_ALL/UNLISTEN/UNLISTEN_ALL, and it's unlikely
+	 * that there would be any performance benefit anyway in sane applications.
 	 */
 	oldcontext = MemoryContextSwitchTo(CurTransactionContext);
 
@@ -642,6 +649,21 @@ Async_Listen(const char *channel)
 
 	queue_listen(LISTEN_LISTEN, channel);
 }
+
+/*
+ * Async_ListenAll
+ *
+ *		This is executed by the LISTEN * command.
+ */
+void
+Async_ListenAll(void)
+{
+	if (Trace_notify)
+		elog(DEBUG1, "Async_ListenAll(%d)", MyProcPid);
+
+	queue_listen(LISTEN_LISTEN_ALL, "");
+}
+
 
 /*
  * Async_Unlisten
@@ -790,6 +812,7 @@ PreCommit_Notify(void)
 		switch (actrec->action)
 		{
 			case LISTEN_LISTEN:
+			case LISTEN_LISTEN_ALL:
 				Exec_ListenPreCommit();
 				break;
 			case LISTEN_UNLISTEN:
@@ -895,6 +918,9 @@ AtCommit_Notify(void)
 			case LISTEN_LISTEN:
 				Exec_ListenCommit(actrec->channel);
 				break;
+			case LISTEN_LISTEN_ALL:
+				Exec_ListenAllCommit();
+				break;
 			case LISTEN_UNLISTEN:
 				Exec_UnlistenCommit(actrec->channel);
 				break;
@@ -905,7 +931,7 @@ AtCommit_Notify(void)
 	}
 
 	/* If no longer listening to anything, get out of listener array */
-	if (amRegisteredListener && listenChannels == NIL)
+	if (amRegisteredListener && listenChannels == NIL && !listenWildcard)
 		asyncQueueUnregister();
 
 	/* And clean up */
@@ -1026,6 +1052,25 @@ Exec_ListenCommit(const char *channel)
 }
 
 /*
+ * Exec_ListenAllCommit --- subroutine for AtCommit_Notify
+ *
+ * Start listening on all notification channels.
+ */
+static void
+Exec_ListenAllCommit(void)
+{
+	listenWildcard = true;
+
+	/*
+	 * We can forget all notification channels right away.  The only way to
+	 * undo a "LISTEN *" is to "UNLISTEN *", and in that case we'd just release
+	 * the list of channels anyway.
+	 */
+	list_free_deep(listenChannels);
+	listenChannels = NIL;
+}
+
+/*
  * Exec_UnlistenCommit --- subroutine for AtCommit_Notify
  *
  * Remove the specified channel name from listenChannels.
@@ -1072,6 +1117,7 @@ Exec_UnlistenAllCommit(void)
 
 	list_free_deep(listenChannels);
 	listenChannels = NIL;
+	listenWildcard = false;
 }
 
 /*
@@ -1130,7 +1176,7 @@ ProcessCompletedNotifies(void)
 	/* Send signals to other backends */
 	signalled = SignalBackends();
 
-	if (listenChannels != NIL)
+	if (listenChannels != NIL || listenWildcard)
 	{
 		/* Read the queue ourselves, and send relevant stuff to the frontend */
 		asyncQueueReadAllNotifications();
@@ -1956,7 +2002,7 @@ asyncQueueProcessPageEntries(volatile QueuePosition *current,
 				/* qe->data is the null-terminated channel name */
 				char	   *channel = qe->data;
 
-				if (IsListeningOn(channel))
+				if (listenWildcard || IsListeningOn(channel))
 				{
 					/* payload follows channel name */
 					char	   *payload = qe->data + strlen(channel) + 1;
@@ -2044,7 +2090,7 @@ ProcessIncomingNotify(void)
 	notifyInterruptPending = false;
 
 	/* Do nothing else if we aren't actively listening */
-	if (listenChannels == NIL)
+	if (listenChannels == NIL && !listenWildcard)
 		return;
 
 	if (Trace_notify)

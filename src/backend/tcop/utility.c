@@ -609,7 +609,10 @@ standard_ProcessUtility(Node *parsetree,
 
 				PreventCommandDuringRecovery("LISTEN");
 				CheckRestrictedOperation("LISTEN");
-				Async_Listen(stmt->conditionname);
+				if (stmt->conditionname)
+					Async_Listen(stmt->conditionname);
+				else
+					Async_ListenAll();
 			}
 			break;
 
