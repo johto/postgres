@@ -89,10 +89,16 @@ static  PLpgSQL_stmt	*make_case(int location, PLpgSQL_expr *t_expr,
 static	char			*NameOfDatum(PLwdatum *wdatum);
 static	void			 check_assignable(PLpgSQL_datum *datum, int location);
 static	void			 read_into_target(PLpgSQL_rec **rec, PLpgSQL_row **row,
-										  bool *strict);
+										  bool *strict, bool accept_colonequals,
+										  List **intermission_locs);
 static	PLpgSQL_row		*read_into_scalar_list(char *initial_name,
 											   PLpgSQL_datum *initial_datum,
 											   int initial_location);
+static	PLpgSQL_row		*read_into_colonequals_list(char *initial_name,
+													PLpgSQL_datum *initial_datum,
+													int initial_location,
+													List **intermission_locs);
+
 static	PLpgSQL_row		*make_scalar_list1(char *initial_name,
 										   PLpgSQL_datum *initial_datum,
 										   int lineno, int location);
@@ -1953,7 +1959,7 @@ stmt_dynexecute : K_EXECUTE
 								if (new->into)			/* multiple INTO */
 									yyerror("syntax error");
 								new->into = true;
-								read_into_target(&new->rec, &new->row, &new->strict);
+								read_into_target(&new->rec, &new->row, &new->strict, false, NULL);
 								endtoken = yylex();
 							}
 							else if (endtoken == K_USING)
@@ -2065,7 +2071,7 @@ stmt_fetch		: K_FETCH opt_fetch_direction cursor_variable K_INTO
 						PLpgSQL_row	   *row;
 
 						/* We have already parsed everything through the INTO keyword */
-						read_into_target(&rec, &row, NULL);
+						read_into_target(&rec, &row, NULL, false, NULL);
 
 						if (yylex() != ';')
 							yyerror("syntax error");
@@ -2785,6 +2791,7 @@ make_execsql_stmt(int firsttoken, int location)
 	bool				have_into = false;
 	bool				have_strict = false;
 	int					into_start_loc = -1;
+	List			   *into_intermission_locs = NIL;
 	int					into_end_loc = -1;
 
 	initStringInfo(&ds);
@@ -2817,10 +2824,11 @@ make_execsql_stmt(int firsttoken, int location)
 		{
 			if (have_into)
 				yyerror("INTO specified more than once");
+
 			have_into = true;
 			into_start_loc = yylloc;
 			plpgsql_IdentifierLookup = IDENTIFIER_LOOKUP_NORMAL;
-			read_into_target(&rec, &row, &have_strict);
+			read_into_target(&rec, &row, &have_strict, true, &into_intermission_locs);
 			plpgsql_IdentifierLookup = IDENTIFIER_LOOKUP_EXPR;
 		}
 	}
@@ -2829,13 +2837,32 @@ make_execsql_stmt(int firsttoken, int location)
 
 	if (have_into)
 	{
+		ListCell *lc;
+		int prev_loc;
+
 		/*
 		 * Insert an appropriate number of spaces corresponding to the
 		 * INTO text, so that locations within the redacted SQL statement
 		 * still line up with those in the original source text.
 		 */
 		plpgsql_append_source_text(&ds, location, into_start_loc);
-		appendStringInfoSpaces(&ds, into_end_loc - into_start_loc);
+		prev_loc = into_start_loc;
+		for (lc = list_head(into_intermission_locs); lc != NULL; lc = lnext(lc))
+		{
+			int intermission_start_loc = lfirst_int(lc);
+			int intermission_end_loc;
+
+			appendStringInfoSpaces(&ds, intermission_start_loc - prev_loc);
+
+			lc = lnext(lc);
+			if (!lc)
+				elog(ERROR, "uneven number of into_intermission_locs");
+
+			intermission_end_loc = lfirst_int(lc);
+			plpgsql_append_source_text(&ds, intermission_start_loc, intermission_end_loc);
+			prev_loc = intermission_end_loc;
+		}
+		appendStringInfoSpaces(&ds, into_end_loc - prev_loc);
 		plpgsql_append_source_text(&ds, into_end_loc, yylloc);
 	}
 	else
@@ -3252,11 +3279,18 @@ check_assignable(PLpgSQL_datum *datum, int location)
 /*
  * Read the argument of an INTO clause.  On entry, we have just read the
  * INTO keyword.
+ *
+ * If intermission_locs is not NULL, the list to which it points will be filled
+ * with an even number of parser locations.  The space between each of these
+ * pairs is NOT part of the INTO clause.  This only applies to the colon-equals
+ * syntax, so callers who don't accept it should just pass NULL.
  */
 static void
-read_into_target(PLpgSQL_rec **rec, PLpgSQL_row **row, bool *strict)
+read_into_target(PLpgSQL_rec **rec, PLpgSQL_row **row, bool *strict, bool accept_colonequals, List **intermission_locs)
 {
 	int			tok;
+
+	Assert(intermission_locs == NULL || *intermission_locs == NIL);
 
 	/* Set default results */
 	*rec = NULL;
@@ -3278,43 +3312,85 @@ read_into_target(PLpgSQL_rec **rec, PLpgSQL_row **row, bool *strict)
 	 * write a multi-target list.  If this ever gets generalized, we should
 	 * probably refactor read_into_scalar_list so it handles all cases.
 	 */
-	switch (tok)
+	if (tok != T_DATUM)
 	{
-		case T_DATUM:
-			if (yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_ROW)
-			{
-				check_assignable(yylval.wdatum.datum, yylloc);
-				*row = (PLpgSQL_row *) yylval.wdatum.datum;
+		/* just to give a better message than "syntax error" */
+		current_token_is_not_variable(tok);
+	}
 
-				if ((tok = yylex()) == ',')
-					ereport(ERROR,
-							(errcode(ERRCODE_SYNTAX_ERROR),
-							 errmsg("record or row variable cannot be part of multiple-item INTO list"),
-							 parser_errposition(yylloc)));
-				plpgsql_push_back_token(tok);
-			}
-			else if (yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_REC)
-			{
-				check_assignable(yylval.wdatum.datum, yylloc);
-				*rec = (PLpgSQL_rec *) yylval.wdatum.datum;
+	if (yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_ROW)
+	{
+		check_assignable(yylval.wdatum.datum, yylloc);
+		*row = (PLpgSQL_row *) yylval.wdatum.datum;
 
-				if ((tok = yylex()) == ',')
-					ereport(ERROR,
-							(errcode(ERRCODE_SYNTAX_ERROR),
-							 errmsg("record or row variable cannot be part of multiple-item INTO list"),
-							 parser_errposition(yylloc)));
-				plpgsql_push_back_token(tok);
+		tok = yylex();
+		if (tok == ',')
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("record or row variable cannot be part of multiple-item INTO list"),
+					 parser_errposition(yylloc)));
+		else if (tok == COLON_EQUALS)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("record or row variable cannot be part of := assignment in INTO"),
+					 parser_errposition(yylloc)));
+		}
+		plpgsql_push_back_token(tok);
+	}
+	else if (yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_REC)
+	{
+		check_assignable(yylval.wdatum.datum, yylloc);
+		*rec = (PLpgSQL_rec *) yylval.wdatum.datum;
+
+		tok = yylex();
+		if (tok == ',')
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("record or row variable cannot be part of multiple-item INTO list"),
+					 parser_errposition(yylloc)));
+		else if (tok == COLON_EQUALS)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("record or row variable cannot be part of := assignment in INTO"),
+					 parser_errposition(yylloc)));
+		}
+		plpgsql_push_back_token(tok);
+	}
+	else
+	{
+		/*
+		 * tok is the token after the first variable.  If the caller is fine with
+		 * that, we peek to see if it's a ':=' to see whether the INTO clause is in
+		 * the colon-equals assignment syntax.
+		 */
+		if (accept_colonequals)
+		{
+			char *initial_name = NameOfDatum(&(yylval.wdatum));
+			PLpgSQL_datum *initial_datum = yylval.wdatum.datum;
+
+			tok = yylex();
+			if (tok == COLON_EQUALS)
+			{
+				/* colon-equals style list */
+				*row = read_into_colonequals_list(initial_name,
+												  initial_datum, yylloc,
+												  intermission_locs);
 			}
 			else
 			{
-				*row = read_into_scalar_list(NameOfDatum(&(yylval.wdatum)),
-											 yylval.wdatum.datum, yylloc);
+				/* has to be the old-style scalar list */
+				plpgsql_push_back_token(tok);
+				*row = read_into_scalar_list(initial_name,
+											 initial_datum, yylloc);
 			}
-			break;
-
-		default:
-			/* just to give a better message than "syntax error" */
-			current_token_is_not_variable(tok);
+		}
+		else
+		{
+			*row = read_into_scalar_list(NameOfDatum(&(yylval.wdatum)),
+										 yylval.wdatum.datum, yylloc);
+		}
 	}
 }
 
@@ -3395,6 +3471,125 @@ read_into_scalar_list(char *initial_name,
 
 	return row;
 }
+
+/*
+ * Given the first datum and name in the INTO list, continue to read
+ * comma-separated "variable := expr" constructs until we run out. Then
+ * construct and return a fake "row" variable that represents the list of
+ * scalars.
+ */
+static PLpgSQL_row *
+read_into_colonequals_list(char *initial_name,
+						   PLpgSQL_datum *initial_datum,
+						   int initial_location,
+						   List **intermission_locs)
+{
+	int				 nfields;
+	char			*fieldnames[1024];
+	int				 varnos[1024];
+	PLpgSQL_row		*row;
+	int				 tok;
+
+	check_assignable(initial_datum, initial_location);
+	fieldnames[0] = initial_name;
+	varnos[0]	  = initial_datum->dno;
+	nfields		  = 1;
+
+	for (;;)
+	{
+		int startloc;
+		int endtoken;
+		PLpgSQL_expr *expr;
+
+		/*
+		 * We continue to read the expression until the next comma (meaning
+		 * there's going to be at least one more pair), or until we hit FROM.
+		 * We have to know when to stop interpreting tokens as part of the SQL
+		 * expression of the very last pair in the list, which means that you
+		 * can't just put a colon-equals style INTO clause anywhere you want.
+		 *
+		 * For a data-modifying statement with a RETURNING (and SELECTs without
+		 * FROM clauses), a semicolon serves the same purpose.
+		 */
+
+		expr = read_sql_construct(';', K_FROM, ',', "semicolon, FROM or comma", "SELECT ", true, false, false, &startloc, &endtoken);
+		/* we don't need the expr, but free it to avoid leaking memory */
+		pfree(expr->query);
+		pfree(expr);
+
+		*intermission_locs = lappend_int(*intermission_locs, startloc);
+		if (endtoken == K_FROM || endtoken == ';')
+		{
+			*intermission_locs = lappend_int(*intermission_locs, yylloc);
+			/*
+			 * We read an extra, non-comma token from yylex(), so push it
+			 * back onto the input stream
+			 */
+			plpgsql_push_back_token(endtoken);
+			break;
+		}
+		/* at least one more pair follows */
+		Assert(endtoken == ',');
+
+		/*
+		 * N.B: the comma should not be considered to be part of the INTO
+		 * clause, so don't append to intermission_locs here.
+		 */
+
+		/* Check for array overflow */
+		if (nfields >= 1024)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("too many INTO variables specified"),
+					 parser_errposition(yylloc)));
+
+		tok = yylex();
+		*intermission_locs = lappend_int(*intermission_locs, yylloc);
+
+		if (tok != T_DATUM)
+		{
+			/* just to give a better message than "syntax error" */
+			current_token_is_not_variable(tok);
+		}
+
+		check_assignable(yylval.wdatum.datum, yylloc);
+		if (yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_ROW ||
+			yylval.wdatum.datum->dtype == PLPGSQL_DTYPE_REC)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("\"%s\" is not a scalar variable",
+							NameOfDatum(&(yylval.wdatum))),
+					 parser_errposition(yylloc)));
+		fieldnames[nfields] = NameOfDatum(&(yylval.wdatum));
+		varnos[nfields++]	= yylval.wdatum.datum->dno;
+
+		tok = yylex();
+		if (tok != COLON_EQUALS)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("expected colon equals"),
+					 parser_errposition(yylloc)));
+	}
+
+	row = palloc(sizeof(PLpgSQL_row));
+	row->dtype = PLPGSQL_DTYPE_ROW;
+	row->refname = pstrdup("*internal*");
+	row->lineno = plpgsql_location_to_lineno(initial_location);
+	row->rowtupdesc = NULL;
+	row->nfields = nfields;
+	row->fieldnames = palloc(sizeof(char *) * nfields);
+	row->varnos = palloc(sizeof(int) * nfields);
+	while (--nfields >= 0)
+	{
+		row->fieldnames[nfields] = fieldnames[nfields];
+		row->varnos[nfields] = varnos[nfields];
+	}
+
+	plpgsql_adddatum((PLpgSQL_datum *)row);
+
+	return row;
+}
+
 
 /*
  * Convert a single scalar into a "row" list.  This is exactly
