@@ -11568,20 +11568,15 @@ target_el:	a_expr AS ColLabel
 					$$->location = @1;
 				}
 			/*
-			 * We support omitting AS only for column labels that aren't
-			 * any known keyword.  There is an ambiguity against postfix
-			 * operators: is "a ! b" an infix expression, or a postfix
-			 * expression and a column label?  We prefer to resolve this
-			 * as an infix expression, which we accomplish by assigning
-			 * IDENT a precedence higher than POSTFIXOP.
+			 * Omitting AS for column labels only ever hides bugs.  Reject
+			 * such queries immediately.
 			 */
 			| a_expr IDENT
 				{
-					$$ = makeNode(ResTarget);
-					$$->name = $2;
-					$$->indirection = NIL;
-					$$->val = (Node *)$1;
-					$$->location = @1;
+					ereport(ERROR,
+							(errcode(ERRCODE_SYNTAX_ERROR),
+							 errmsg("query with AS omitted for column alias"),
+							 parser_errposition(@1)));
 				}
 			| a_expr
 				{
