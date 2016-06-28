@@ -366,6 +366,8 @@ CreateConstraintEntry(const char *constraintName,
 		 * Register dependencies from constraint to objects mentioned in CHECK
 		 * expression.
 		 */
+
+		/* XXX FIXME not necessarily a single rel expr for FKs */
 		recordDependencyOnSingleRelExpr(&conobject, conExpr, relId,
 										DEPENDENCY_NORMAL,
 										DEPENDENCY_NORMAL);

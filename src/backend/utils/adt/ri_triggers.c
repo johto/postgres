@@ -53,6 +53,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+#include "utils/ruleutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
@@ -117,6 +118,7 @@ typedef struct RI_ConstraintInfo
 	char		confupdtype;	/* foreign key's ON UPDATE action */
 	char		confdeltype;	/* foreign key's ON DELETE action */
 	char		confmatchtype;	/* foreign key's match type */
+	Expr	   *where_clause;	/* WHERE clause, if any */
 	int			nkeys;			/* number of key columns */
 	int16		pk_attnums[RI_MAX_NUMKEYS];		/* attnums of referenced cols */
 	int16		fk_attnums[RI_MAX_NUMKEYS];		/* attnums of referencing cols */
@@ -433,7 +435,28 @@ RI_FKey_check(TriggerData *trigdata)
 			querysep = "AND";
 			queryoids[i] = fk_type;
 		}
+
+		if (riinfo->where_clause != NULL)
+		{
+			List *dprcontext = NIL;
+			char *expr;
+
+			/*
+			 * XXX FIXME: not sure if using deparsing for this is the best
+			 * method :-(
+			 */
+			dprcontext = deparse_context_for("x", riinfo->pk_relid);
+
+			expr = deparse_expression((Node *) riinfo->where_clause,
+									  dprcontext,
+									  true,
+									  true);
+
+			appendStringInfo(&querybuf, " AND %s", expr);
+		}
+
 		appendStringInfoString(&querybuf, " FOR KEY SHARE OF x");
+		elog(INFO, "query: %s", querybuf.data);
 
 		/* Prepare and save the plan */
 		qplan = ri_PlanCheck(querybuf.data, riinfo->nkeys, queryoids,
@@ -2095,6 +2118,11 @@ RI_FKey_pk_upd_check_required(Trigger *trigger, Relation pk_rel,
 	 * Get arguments.
 	 */
 	riinfo = ri_FetchConstraintInfo(trigger, pk_rel, true);
+	if (riinfo->where_clause != NULL)
+	{
+		/* we could probably do better here XXX FIXME */
+		return true;
+	}
 
 	switch (riinfo->confmatchtype)
 	{
@@ -2152,6 +2180,11 @@ RI_FKey_fk_upd_check_required(Trigger *trigger, Relation fk_rel,
 	 * Get arguments.
 	 */
 	riinfo = ri_FetchConstraintInfo(trigger, fk_rel, false);
+	if (riinfo->where_clause != NULL)
+	{
+		/* we could probably do better here XXX FIXME */
+		return true;
+	}
 
 	switch (riinfo->confmatchtype)
 	{
@@ -2847,6 +2880,13 @@ ri_LoadConstraintInfo(Oid constraintOid)
 	riinfo->confdeltype = conForm->confdeltype;
 	riinfo->confmatchtype = conForm->confmatchtype;
 
+    adatum = SysCacheGetAttr(CONSTROID, tup, Anum_pg_constraint_conbin,
+							 &isNull);
+    if (!isNull)
+		riinfo->where_clause = stringToNode(TextDatumGetCString(adatum));
+	else
+		riinfo->where_clause = NULL;
+
 	/*
 	 * We expect the arrays to be 1-D arrays of the right types; verify that.
 	 * We don't need to use deconstruct_array() since the array data is just
@@ -3319,6 +3359,7 @@ ri_ReportViolation(const RI_ConstraintInfo *riinfo,
 						NameStr(riinfo->conname)),
 				 has_perm ?
 				 errdetail("Key (%s)=(%s) is not present in table \"%s\".",
+				 //errdetail("Key (%s)=(%s) is not present in table \"%s\" or does not match the WHERE clause.",
 						   key_names.data, key_values.data,
 						   RelationGetRelationName(pk_rel)) :
 				 errdetail("Key is not present in table \"%s\".",

@@ -128,12 +128,14 @@ CATALOG(pg_constraint,2606)
 	Oid			conexclop[1];
 
 	/*
-	 * If a check constraint, nodeToString representation of expression
+	 * If a check constraint, nodeToString representation of expression.  If a
+	 * foreign key constraint, nodeToString representation of where_clause.
 	 */
 	pg_node_tree conbin;
 
 	/*
-	 * If a check constraint, source-text representation of expression
+	 * If a check constraint, source-text representation of expression.  N.B: not
+	 * set for FOREIGN KEY constraints.  XXX FIXME ?
 	 */
 	text		consrc;
 #endif

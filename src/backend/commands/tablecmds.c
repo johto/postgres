@@ -303,6 +303,7 @@ static CoercionPathType findFkeyCast(Oid targetTypeId, Oid sourceTypeId,
 			 Oid *funcid);
 static void validateCheckConstraint(Relation rel, HeapTuple constrtup);
 static void validateForeignKeyConstraint(char *conname,
+							 Node *where_clause,
 							 Relation rel, Relation pkrel,
 							 Oid pkindOid, Oid constraintOid);
 static void createForeignKeyTriggers(Relation rel, Oid refRelOid,
@@ -3920,7 +3921,9 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 
 				refrel = heap_open(con->refrelid, RowShareLock);
 
-				validateForeignKeyConstraint(fkconstraint->conname, rel, refrel,
+				validateForeignKeyConstraint(fkconstraint->conname,
+											 fkconstraint->where_clause,
+											 rel, refrel,
 											 con->refindid,
 											 con->conid);
 
@@ -6253,6 +6256,8 @@ ATAddForeignKeyConstraint(AlteredTableInfo *tab, Relation rel,
 	bool		old_check_ok;
 	ObjectAddress address;
 	ListCell   *old_pfeqop_item = list_head(fkconstraint->old_conpfeqop);
+	Expr *where_clause;
+	char *where_clause_adbin;
 
 	/*
 	 * Grab ShareRowExclusiveLock on the pk table, so that someone doesn't
@@ -6379,6 +6384,47 @@ ATAddForeignKeyConstraint(AlteredTableInfo *tab, Relation rel,
 	 */
 	old_check_ok = (fkconstraint->old_conpfeqop != NIL);
 	Assert(!old_check_ok || numfks == list_length(fkconstraint->old_conpfeqop));
+
+
+	if (fkconstraint->where_clause != NULL)
+	{
+		ParseState *pstate;
+		RangeTblEntry *relrte,
+					  *pkrelrte;
+
+		pstate = make_parsestate(NULL);
+		pkrelrte = addRangeTableEntryForRelation(pstate,
+												 pkrel,
+												 NULL,
+												 false,
+												 true);
+		relrte = addRangeTableEntryForRelation(pstate,
+											   rel,
+											   NULL,
+											   false,
+											   true);
+
+		addRTEtoQuery(pstate, pkrelrte, false, true, true);
+		addRTEtoQuery(pstate, relrte, false, true, true);
+
+		where_clause = (Expr *) transformWhereClause(pstate,
+													 fkconstraint->where_clause,
+													 EXPR_KIND_WHERE,
+													 "WHERE");
+		where_clause_adbin = nodeToString(where_clause);
+		elog(INFO, "%s", where_clause_adbin);
+
+		/*
+		 * XXX FIXME check that there aren't things like scalar subqueries in
+		 * the expression!
+		 */
+	}
+	else
+	{
+		where_clause = NULL;
+		where_clause_adbin = NULL;
+	}
+
 
 	for (i = 0; i < numpks; i++)
 	{
@@ -6589,9 +6635,9 @@ ATAddForeignKeyConstraint(AlteredTableInfo *tab, Relation rel,
 									  fkconstraint->fk_del_action,
 									  fkconstraint->fk_matchtype,
 									  NULL,		/* no exclusion constraint */
-									  NULL,		/* no check constraint */
-									  NULL,
-									  NULL,
+									  (Node *) where_clause,
+									  where_clause_adbin,
+									  NULL,		/* XXX FIXME ? */
 									  true,		/* islocal */
 									  0,		/* inhcount */
 									  true,		/* isnoinherit */
@@ -6856,6 +6902,7 @@ ATExecValidateConstraint(Relation rel, char *constrName, bool recurse,
 		if (con->contype == CONSTRAINT_FOREIGN)
 		{
 			Relation	refrel;
+			Node *where_clause;
 
 			/*
 			 * Triggers are already in place on both tables, so a concurrent
@@ -6867,7 +6914,12 @@ ATExecValidateConstraint(Relation rel, char *constrName, bool recurse,
 			 */
 			refrel = heap_open(con->confrelid, RowShareLock);
 
-			validateForeignKeyConstraint(constrName, rel, refrel,
+			/* XXX FIXME */
+			where_clause = NULL;
+
+			validateForeignKeyConstraint(constrName,
+										 where_clause,
+										 rel, refrel,
 										 con->conindid,
 										 HeapTupleGetOid(tuple));
 			heap_close(refrel, NoLock);
@@ -7160,6 +7212,9 @@ transformFkeyCheckAttrs(Relation pkrel,
 		 * Must have the right number of columns; must be unique and not a
 		 * partial index; forget it if there are any expressions, too. Invalid
 		 * indexes are out as well.
+		 *
+		 * XXX FIXME: allow partial indexes if they match the predicate on the
+		 * constraint.
 		 */
 		if (indexStruct->indnatts == numattrs &&
 			indexStruct->indisunique &&
@@ -7385,6 +7440,7 @@ validateCheckConstraint(Relation rel, HeapTuple constrtup)
  */
 static void
 validateForeignKeyConstraint(char *conname,
+							 Node *where_clause,
 							 Relation rel,
 							 Relation pkrel,
 							 Oid pkindOid,
@@ -7417,7 +7473,8 @@ validateForeignKeyConstraint(char *conname,
 	 * See if we can do it with a single LEFT JOIN query.  A FALSE result
 	 * indicates we must proceed with the fire-the-trigger method.
 	 */
-	if (RI_Initial_Check(&trig, rel, pkrel))
+	/* TODO FIXME */
+	if (RI_Initial_Check(&trig, rel, pkrel) && false)
 		return;
 
 	/*
