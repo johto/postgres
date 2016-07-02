@@ -35,6 +35,68 @@ insert into inserttest values(30, 50, repeat('x', 10000));
 
 select col1, col2, char_length(col3) from inserttest;
 
+--
+-- insert with SET syntax
+--
+truncate inserttest;
+
+create type inserttestcomplextype as (f1 int, f2 int);
+alter table inserttest add column col4 int[];
+alter table inserttest add column col5 inserttestcomplextype;
+
+-- these all fail
+insert into inserttest set
+    colnonexistent = 1;
+insert into inserttest set
+    col1 = col1;
+insert into inserttest set
+    col4[1] = 1,
+    col4 = '{}';
+insert into inserttest set
+    col5.nonexistent = 1;
+insert into inserttest set
+    col5.f1 = 1,
+    col5 = '()';
+insert into inserttest set
+    col1 = 1,
+    col1 = 1;
+
+select * from inserttest;
+truncate table inserttest;
+
+-- defaults
+insert into inserttest set
+    col1 = default,
+    col2 = default,
+    col3 = default;
+insert into inserttest set
+    col2 = 3,
+    col3 = default;
+insert into inserttest set
+    col1 = default,
+    col2 = 5,
+    col3 = default;
+
+select * from inserttest;
+truncate table inserttest;
+
+-- more complex cases
+insert into inserttest set
+    col2 = (select count(*))::int;
+insert into inserttest set
+    col2 = 1,
+    col4[1] = 1,
+    -- weird, but accepted
+    col4[1] = 2;
+insert into inserttest set
+    col2 = 1,
+    col5.f1 = 1,
+    -- weird, but accepted
+    col5.f1 = 2;
+
+select * from inserttest;
+truncate table inserttest;
+
 drop table inserttest;
 
 --
@@ -84,3 +146,4 @@ create rule irule3 as on insert to inserttest2 do also
 drop table inserttest2;
 drop table inserttest;
 drop type insert_test_type;
+drop type inserttestcomplextype;

@@ -80,6 +80,98 @@ select col1, col2, char_length(col3) from inserttest;
    30 |   50 |       10000
 (8 rows)
 
+--
+-- insert with SET syntax
+--
+truncate inserttest;
+create type inserttestcomplextype as (f1 int, f2 int);
+alter table inserttest add column col4 int[];
+alter table inserttest add column col5 inserttestcomplextype;
+-- these all fail
+insert into inserttest set
+    colnonexistent = 1;
+ERROR:  column "colnonexistent" of relation "inserttest" does not exist
+LINE 2:     colnonexistent = 1;
+            ^
+insert into inserttest set
+    col1 = col1;
+ERROR:  column "col1" does not exist
+LINE 2:     col1 = col1;
+                   ^
+HINT:  There is a column named "col1" in table "inserttest", but it cannot be referenced from this part of the query.
+insert into inserttest set
+    col4[1] = 1,
+    col4 = '{}';
+ERROR:  column "col4" specified more than once
+LINE 3:     col4 = '{}';
+            ^
+insert into inserttest set
+    col5.nonexistent = 1;
+ERROR:  cannot assign to field "nonexistent" of column "col5" because there is no such column in data type inserttestcomplextype
+LINE 2:     col5.nonexistent = 1;
+            ^
+insert into inserttest set
+    col5.f1 = 1,
+    col5 = '()';
+ERROR:  column "col5" specified more than once
+LINE 3:     col5 = '()';
+            ^
+insert into inserttest set
+    col1 = 1,
+    col1 = 1;
+ERROR:  column "col1" specified more than once
+LINE 3:     col1 = 1;
+            ^
+select * from inserttest;
+ col1 | col2 | col3 | col4 | col5 
+------+------+------+------+------
+(0 rows)
+
+truncate table inserttest;
+-- defaults
+insert into inserttest set
+    col1 = default,
+    col2 = default,
+    col3 = default;
+ERROR:  null value in column "col2" violates not-null constraint
+DETAIL:  Failing row contains (null, null, testing, null, null).
+insert into inserttest set
+    col2 = 3,
+    col3 = default;
+insert into inserttest set
+    col1 = default,
+    col2 = 5,
+    col3 = default;
+select * from inserttest;
+ col1 | col2 |  col3   | col4 | col5 
+------+------+---------+------+------
+      |    3 | testing |      | 
+      |    5 | testing |      | 
+(2 rows)
+
+truncate table inserttest;
+-- more complex cases
+insert into inserttest set
+    col2 = (select count(*))::int;
+insert into inserttest set
+    col2 = 1,
+    col4[1] = 1,
+    -- weird, but accepted
+    col4[1] = 2;
+insert into inserttest set
+    col2 = 1,
+    col5.f1 = 1,
+    -- weird, but accepted
+    col5.f1 = 2;
+select * from inserttest;
+ col1 | col2 |  col3   | col4 | col5 
+------+------+---------+------+------
+      |    1 | testing |      | 
+      |    1 | testing | {2}  | 
+      |    1 | testing |      | (2,)
+(3 rows)
+
+truncate table inserttest;
 drop table inserttest;
 --
 -- check indirection (field/array assignment), cf bug #14265
@@ -160,3 +252,4 @@ Rules:
 drop table inserttest2;
 drop table inserttest;
 drop type insert_test_type;
+drop type inserttestcomplextype;
