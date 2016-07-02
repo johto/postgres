@@ -467,8 +467,9 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 						stmt->onConflictClause->action == ONCONFLICT_UPDATE);
 
 	/*
-	 * We have three cases to deal with: DEFAULT VALUES (selectStmt == NULL),
-	 * VALUES list, or general SELECT input.  We special-case VALUES, both for
+	 * We have four cases to deal with: DEFAULT VALUES (selectStmt == NULL and
+	 * cols == NIL), SET syntax (selectStmt == NULL but cols != NIL), VALUES
+	 * list, or general SELECT input.  We special-case VALUES, both for
 	 * efficiency and so we can handle DEFAULT specifications.
 	 *
 	 * The grammar allows attaching ORDER BY, LIMIT, FOR UPDATE, or WITH to a
@@ -523,7 +524,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	/*
 	 * Determine which variant of INSERT we have.
 	 */
-	if (selectStmt == NULL)
+	if (selectStmt == NULL && stmt->cols == NIL)
 	{
 		/*
 		 * We have INSERT ... DEFAULT VALUES.  We can handle this case by
@@ -531,6 +532,25 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 		 * the planner expands the targetlist.
 		 */
 		exprList = NIL;
+	}
+	else if (selectStmt == NULL)
+	{
+		/*
+		 * INSERT INTO ... SET syntax.
+		 */
+		Assert(stmt->cols != NIL);
+
+		stmt->cols = transformUpdateTargetList(pstate, stmt->cols);
+
+		exprList = NIL;
+		foreach(lc, stmt->cols)
+		{
+			TargetEntry *rt = (TargetEntry *) lfirst(lc);
+
+			Assert(IsA(rt, TargetEntry));
+
+			exprList = lappend(exprList, rt->expr);
+		}
 	}
 	else if (isGeneralSelect)
 	{
@@ -2179,7 +2199,8 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 
 /*
  * transformUpdateTargetList -
- *	handle SET clause in UPDATE/INSERT ... ON CONFLICT UPDATE
+ *	handle SET clause in UPDATE / INSERT ... ON CONFLICT UPDATE / INSERT INTO
+ *	... SET
  */
 static List *
 transformUpdateTargetList(ParseState *pstate, List *origTlist)

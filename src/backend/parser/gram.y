@@ -362,7 +362,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				qualified_name_list any_name any_name_list type_name_list
 				any_operator expr_list attrs
 				target_list opt_target_list insert_column_list set_target_list
-				set_clause_list set_clause multiple_set_clause
+				insert_set_clause_list set_clause_list set_clause multiple_set_clause
 				ctext_expr_list ctext_row def_list operator_def_list indirection opt_indirection
 				reloption_list group_clause TriggerFuncArgs select_limit
 				opt_select_limit opclass_item_list opclass_drop_list
@@ -9661,6 +9661,12 @@ insert_rest:
 					$$->cols = $2;
 					$$->selectStmt = $4;
 				}
+			| SET insert_set_clause_list
+				{
+					$$ = makeNode(InsertStmt);
+					$$->cols = $2;
+					$$->selectStmt = NULL;
+				}
 			| DEFAULT VALUES
 				{
 					$$ = makeNode(InsertStmt);
@@ -9685,6 +9691,17 @@ insert_column_item:
 					$$->val = NULL;
 					$$->location = @1;
 				}
+		;
+
+/*
+ * This is different from set_clause_list used in UPDATE because the SelectStmt
+ * syntax already does everything you might want to do in an in INSERT.
+ */
+insert_set_clause_list:
+			single_set_clause
+				{ $$ = list_make1($1); }
+			| insert_set_clause_list ',' single_set_clause
+				{ $$ = lappend($1,$3); }
 		;
 
 opt_on_conflict:

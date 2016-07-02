@@ -406,9 +406,11 @@ typedef struct A_ArrayExpr
  * 'AS ColumnLabel' clause, or NULL if there was none, and 'val' is the
  * value expression itself.  The 'indirection' field is not used.
  *
- * INSERT uses ResTarget in its target-column-names list.  Here, 'name' is
- * the name of the destination column, 'indirection' stores any subscripts
- * attached to the destination, and 'val' is not used.
+ * INSERT uses ResTarget in its "cols" list.  Here, 'name' is the name of the
+ * destination column, 'indirection' stores any subscripts attached to the
+ * destination.  'val' is only used if "cols" is from an INSERT ... SET syntax
+ * statement; otherwise "cols" only represents the column name list, and thus
+ * 'val' is unused.
  *
  * In an UPDATE target list, 'name' is the name of the destination column,
  * 'indirection' stores any subscripts attached to the destination, and
