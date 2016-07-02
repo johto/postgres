@@ -434,6 +434,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <node>	TableElement TypedTableElement ConstraintElem TableFuncElement
 %type <node>	columnDef columnOptions
+%type <str>     OptColumnComment
 %type <defelt>	def_elem reloption_elem old_aggr_elem operator_def_elem
 %type <node>	def_arg columnElem where_clause where_or_current_clause
 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound
@@ -2952,7 +2953,7 @@ TypedTableElement:
 			| TableConstraint					{ $$ = $1; }
 		;
 
-columnDef:	ColId Typename create_generic_options ColQualList
+columnDef:	ColId Typename create_generic_options ColQualList OptColumnComment
 				{
 					ColumnDef *n = makeNode(ColumnDef);
 					n->colname = $1;
@@ -2997,6 +2998,14 @@ ColQualList:
 			ColQualList ColConstraint				{ $$ = lappend($1, $2); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
+
+OptColumnComment:
+    COMMENT '('
+        { $$ = $1; }
+        |
+    /* EMPTY */
+    { $$ = NULL; }
+        ;
 
 ColConstraint:
 			CONSTRAINT name ColConstraintElem
