@@ -22,12 +22,21 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 [ WITH [ RECURSIVE ] <replaceable class="parameter">with_query</replaceable> [, ...] ]
-INSERT INTO <replaceable class="PARAMETER">table_name</replaceable> [ AS <replaceable class="parameter">alias</replaceable> ] [ ( <replaceable class="PARAMETER">column_name</replaceable> [, ...] ) ]
-    { DEFAULT VALUES | VALUES ( { <replaceable class="PARAMETER">expression</replaceable> | DEFAULT } [, ...] ) [, ...] | <replaceable class="PARAMETER">query</replaceable> }
+INSERT INTO <replaceable class="PARAMETER">table_name</replaceable> [ AS <replaceable class="parameter">alias</replaceable> ]
+    {
+        [ column_list ] VALUES ( { <replaceable class="PARAMETER">expression</replaceable> | DEFAULT } [, ...] ) [, ...] |
+        [ column_list ] <replaceable class="PARAMETER">query</replaceable> |
+        DEFAULT VALUES |
+        SET <replaceable class="PARAMETER">column_name</replaceable> = { <replaceable class="PARAMETER">expression</replaceable> | DEFAULT } [, ...]
+    }
     [ ON CONFLICT [ <replaceable class="parameter">conflict_target</replaceable> ] <replaceable class="parameter">conflict_action</replaceable> ]
     [ RETURNING * | <replaceable class="parameter">output_expression</replaceable> [ [ AS ] <replaceable class="parameter">output_name</replaceable> ] [, ...] ]
 
-<phrase>where <replaceable class="parameter">conflict_target</replaceable> can be one of:</phrase>
+<phrase>where <replaceable class="parameter">column_list</replaceable> is:</phrase>
+
+    ( <replaceable class="PARAMETER">column_name</replaceable> [, ...] )
+
+<phrase>and <replaceable class="parameter">conflict_target</replaceable> can be one of:</phrase>
 
     ( { <replaceable class="parameter">index_column_name</replaceable> | ( <replaceable class="parameter">index_expression</replaceable> ) } [ COLLATE <replaceable class="parameter">collation</replaceable> ] [ <replaceable class="parameter">opclass</replaceable> ] [, ...] ) [ WHERE <replaceable class="PARAMETER">index_predicate</replaceable> ]
     ON CONSTRAINT <replaceable class="PARAMETER">constraint_name</replaceable>
@@ -53,13 +62,26 @@ INSERT INTO <replaceable class="PARAMETER">table_name</replaceable> [ AS <replac
   </para>
 
   <para>
-   The target column names can be listed in any order.  If no list of
-   column names is given at all, the default is all the columns of the
-   table in their declared order; or the first <replaceable>N</> column
-   names, if there are only <replaceable>N</> columns supplied by the
-   <literal>VALUES</> clause or <replaceable>query</>.  The values
-   supplied by the <literal>VALUES</> clause or <replaceable>query</> are
-   associated with the explicit or implicit column list left-to-right.
+   The target column names in a <replaceable>column_list</> can be
+   listed in any order.  If no <replaceable>column_list</> is given at
+   all (and the <literal>SET</> syntax is not used), the default is all
+   the columns of the table in their declared order; or the first
+   <replaceable>N</> column names, if there are only <replaceable>N</>
+   columns supplied by the <literal>VALUES</> clause or
+   <replaceable>query</>.  The values supplied by the <literal>VALUES</>
+   clause or <replaceable>query</> are associated with the explicit or
+   implicit column list left-to-right.
+  </para>
+
+  <para>
+    Instead of a <replaceable>column_list</> and a <literal>VALUES</>
+    clause, a <literal>SET</> clause similar to that of an
+    <command>UPDATE</command> can be used instead.  The advantage of the
+    <literal>SET</> clause is that instead of matching the elements in
+    the two lists by ordinal position, the column name and the
+    expression to assign to that column are visually next to each other.
+    This can make long column assignment lists significantly more
+    readable.
   </para>
 
   <para>
@@ -690,13 +712,13 @@ INSERT INTO distributors (did, dname) VALUES (10, 'Conrad International')
   <para>
    <command>INSERT</command> conforms to the SQL standard, except that
    the <literal>RETURNING</> clause is a
-   <productname>PostgreSQL</productname> extension, as is the ability
-   to use <literal>WITH</> with <command>INSERT</>, and the ability to
-   specify an alternative action with <literal>ON CONFLICT</>.
-   Also, the case in
-   which a column name list is omitted, but not all the columns are
-   filled from the <literal>VALUES</> clause or <replaceable>query</>,
-   is disallowed by the standard.
+   <productname>PostgreSQL</productname> extension, as is the
+   <literal>SET</> clause when used instead of a VALUES clause, the
+   ability to use <literal>WITH</> with <command>INSERT</>, and the
+   ability to specify an alternative action with <literal>ON
+   CONFLICT</>.  Also, the case in which a column name list is omitted,
+   but not all the columns are filled from the <literal>VALUES</> clause
+   or <replaceable>query</>, is disallowed by the standard.
   </para>
 
   <para>
