@@ -1946,3 +1946,68 @@ NOTICE:  sum_transfn called with 4
 (1 row)
 
 rollback;
+/* single_value */
+select single_value(vv.v) from (values (1), (1)) vv(v);
+ single_value 
+--------------
+            1
+(1 row)
+
+select single_value(vv.v) from (values (1), (2)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value 1 is different from 2
+select single_value(vv.v) from (values (1), (NULL)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value 1 is different from NULL
+select single_value(vv.v) from (values (1), (1), (NULL)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value 1 is different from NULL
+select single_value(vv.v) from (values (1), (NULL), (NULL)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value 1 is different from NULL
+select single_value(vv.v) from (values (NULL), (1)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value NULL is different from 1
+select single_value(vv.v) from (values (NULL), (NULL), (1)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value NULL is different from 1
+select single_value(vv.v) from (values (NULL), (1), (1)) vv(v);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value NULL is different from 1
+select single_value(vv.v) from (values (NULL), (NULL)) vv(v);
+ single_value 
+--------------
+ 
+(1 row)
+
+select single_value(vv.v) from (values (NULL), (NULL), (NULL)) vv(v);
+ single_value 
+--------------
+ 
+(1 row)
+
+select single_value(vv.v) from (values (json '{}')) vv(v);
+ERROR:  could not identify an equality operator for type json
+select single_value(vv.v1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+ERROR:  more than one distinct value passed to single_value
+DETAIL:  pre-existing value 1 is different from 2
+select vv.v2, single_value(vv.v1) from (values (1,1), (2,2), (2,2), (3,3)) vv(v1, v2) group by vv.v2;
+ v2 | single_value 
+----+--------------
+  1 |            1
+  2 |            2
+  3 |            3
+(3 rows)
+
+select single_value(vv.v1) FILTER (WHERE vv.v2 = 1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+ single_value 
+--------------
+            1
+(1 row)
+
+select single_value(vv.v) from (select 1) vv(V) where false;
+ single_value 
+--------------
+             
+(1 row)
+

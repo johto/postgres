@@ -890,6 +890,12 @@ DATA(insert OID = 4053 (  array_agg		   PGNSP PGUID 12 1 0 0 0 t f f f f f i s 1
 DESCR("concatenate aggregate input into an array");
 DATA(insert OID = 3218 ( width_bucket	   PGNSP PGUID 12 1 0 0 0 f f f f t f i s 2 0 23 "2283 2277" _null_ _null_ _null_ _null_ _null_ width_bucket_array _null_ _null_ _null_ ));
 DESCR("bucket number of operand given a sorted array of bucket lower bounds");
+DATA(insert OID = 4800 ( single_value_agg_transfn   PGNSP PGUID 12 1 0 0 0 f f f f f f i s 2 0 2281 "2281 2283" _null_ _null_ _null_ _null_ _null_ single_value_agg_transfn _null_ _null_ _null_ ));
+DESCR("aggregate transition function");
+DATA(insert OID = 4801 ( single_value_agg_finalfn   PGNSP PGUID 12 1 0 0 0 f f f f f f i s 2 0 2283 "2281 2283" _null_ _null_ _null_ _null_ _null_ single_value_agg_finalfn _null_ _null_ _null_ ));
+DESCR("aggregate final function");
+DATA(insert OID = 4202 ( single_value   PGNSP PGUID 12 1 0 0 0 t f f f f f i s 1 0 2283 "2283" _null_ _null_ _null_ _null_ _null_ aggregate_dummy _null_ _null_ _null_ ));
+DESCR("return the single distinct value from aggregate input");
 DATA(insert OID = 3816 (  array_typanalyze PGNSP PGUID 12 1 0 0 0 f f f f t f s s 1 0 16 "2281" _null_ _null_ _null_ _null_ _null_ array_typanalyze _null_ _null_ _null_ ));
 DESCR("array typanalyze");
 DATA(insert OID = 3817 (  arraycontsel	   PGNSP PGUID 12 1 0 0 0 f f f f t f s s 4 0 701 "2281 26 2281 23" _null_ _null_ _null_ _null_ _null_ arraycontsel _null_ _null_ _null_ ));

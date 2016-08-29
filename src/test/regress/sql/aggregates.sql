@@ -821,3 +821,24 @@ create aggregate my_half_sum(int4)
 select my_sum(one),my_half_sum(one) from (values(1),(2),(3),(4)) t(one);
 
 rollback;
+
+/* single_value */
+select single_value(vv.v) from (values (1), (1)) vv(v);
+select single_value(vv.v) from (values (1), (2)) vv(v);
+select single_value(vv.v) from (values (1), (NULL)) vv(v);
+select single_value(vv.v) from (values (1), (1), (NULL)) vv(v);
+select single_value(vv.v) from (values (1), (NULL), (NULL)) vv(v);
+select single_value(vv.v) from (values (NULL), (1)) vv(v);
+select single_value(vv.v) from (values (NULL), (NULL), (1)) vv(v);
+select single_value(vv.v) from (values (NULL), (1), (1)) vv(v);
+select single_value(vv.v) from (values (NULL), (NULL)) vv(v);
+select single_value(vv.v) from (values (NULL), (NULL), (NULL)) vv(v);
+select single_value(vv.v) from (values (json '{}')) vv(v);
+select single_value(vv.v) from (values (ROW(1,2))) vv(v);
+select single_value(vv) from (values (1,1), (1,1)) vv(x,y);
+select single_value(vv) from (values (1,1), (1,NULL)) vv(x,y);
+select single_value(vv) from (values (1,1), (1,2)) vv(x,y);
+select single_value(vv.v1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+select vv.v2, single_value(vv.v1) from (values (1,1), (2,2), (2,2), (3,3)) vv(v1, v2) group by vv.v2;
+select single_value(vv.v1) FILTER (WHERE vv.v2 = 1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+select single_value(vv.v) from (select 1) vv(V) where false;

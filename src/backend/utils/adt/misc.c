@@ -42,6 +42,7 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/timestamp.h"
+#include "utils/typcache.h"
 
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
 
@@ -889,4 +890,133 @@ parse_ident(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
+
+}
+
+struct single_value_agg_stype
+{
+	FunctionCallInfoData fcinfo;
+	Datum datum;
+	bool isnull;
+};
+
+Datum
+single_value_agg_transfn(PG_FUNCTION_ARGS)
+{
+	MemoryContext aggcontext;
+	struct single_value_agg_stype *state;
+
+	if (!AggCheckCallContext(fcinfo, &aggcontext))
+	{
+		/* cannot be called directly because of internal-type argument */
+		elog(ERROR, "single_value_agg_transfn called in non-aggregate context");
+	}
+
+	if (PG_ARGISNULL(0))
+	{
+		TypeCacheEntry *typentry;
+		Oid arg1_typeid = get_fn_expr_argtype(fcinfo->flinfo, 1);
+
+		if (arg1_typeid == InvalidOid)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("could not determine input data type")));
+		else if (arg1_typeid == RECORDOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("record types are not supported with single_value")));
+
+		typentry = lookup_type_cache(arg1_typeid,
+									 TYPECACHE_EQ_OPR_FINFO);
+		if (!OidIsValid(typentry->eq_opr_finfo.fn_oid))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_FUNCTION),
+			errmsg("could not identify an equality operator for type %s",
+				   format_type_be(arg1_typeid))));
+
+		state = (struct single_value_agg_stype *) MemoryContextAlloc(aggcontext, sizeof(struct single_value_agg_stype));
+
+		if (PG_ARGISNULL(1))
+		{
+			state->datum = (Datum) 0;
+			state->isnull = true;
+			memset(&state->fcinfo, 0, sizeof(state->fcinfo));
+		}
+		else
+		{
+			state->datum = PG_GETARG_DATUM(1);
+			state->isnull = false;
+			InitFunctionCallInfoData(state->fcinfo, &typentry->eq_opr_finfo, 2,
+									 PG_GET_COLLATION(), NULL, NULL);
+		}
+	}
+	else
+	{
+		bool oprresult;
+
+		state = (struct single_value_agg_stype *) PG_GETARG_POINTER(0);
+
+		if (state->isnull)
+			oprresult = PG_ARGISNULL(1);
+		else if (PG_ARGISNULL(1))
+			oprresult = false;
+		else
+		{
+			state->fcinfo.argnull[0] = false;
+			state->fcinfo.argnull[1] = false;
+			state->fcinfo.arg[0] = state->datum;
+			state->fcinfo.arg[1] = PG_GETARG_DATUM(1);
+			state->fcinfo.isnull = false;
+			oprresult = DatumGetBool(FunctionCallInvoke(&state->fcinfo));
+		}
+		if (!oprresult)
+		{
+			Oid		foutoid;
+			bool	typisvarlena;
+			char   *oldvalue;
+			char   *newvalue;
+
+			getTypeOutputInfo(get_fn_expr_argtype(fcinfo->flinfo, 1),
+							  &foutoid, &typisvarlena);
+
+			if (state->isnull)
+				oldvalue = "NULL";
+			else
+				oldvalue = OidOutputFunctionCall(foutoid, state->datum);
+
+			if (PG_ARGISNULL(1))
+				newvalue = "NULL";
+			else
+				newvalue = OidOutputFunctionCall(foutoid, PG_GETARG_DATUM(1));
+
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("more than one distinct value passed to single_value"),
+					 errdetail("pre-existing value %s is different from %s", oldvalue, newvalue)));
+		}
+	}
+
+	/*
+	 * The transition type for single_value() is declared to be "internal",
+	 * which is a pass-by-value type the same size as a pointer.  So we can
+	 * safely pass the pointer through nodeAgg.c's machinations.
+	 */
+	PG_RETURN_POINTER(state);
+}
+
+Datum
+single_value_agg_finalfn(PG_FUNCTION_ARGS)
+{
+	struct single_value_agg_stype *state;
+
+	/* cannot be called directly because of internal-type argument */
+	Assert(AggCheckCallContext(fcinfo, NULL));
+
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+
+	state = (struct single_value_agg_stype *) PG_GETARG_POINTER(0);
+	if (state->isnull)
+		PG_RETURN_NULL();
+	PG_RETURN_DATUM(state->datum);
 }
