@@ -13,6 +13,9 @@
  *-------------------------------------------------------------------------
  */
 
+// XXX REMOVEME
+#define TCP_USER_TIMEOUT 18
+
 #include "postgres_fe.h"
 
 #include <sys/types.h>
@@ -1540,6 +1543,47 @@ setKeepalivesWin32(PGconn *conn)
 #endif   /* SIO_KEEPALIVE_VALS */
 #endif   /* WIN32 */
 
+#ifdef TCP_USER_TIMEOUT
+/*
+ * Set the keepalive idle timer.
+ */
+static int
+setTcpUserTimeout(PGconn *conn)
+{
+	int value;
+
+	if (conn->tcp_user_timeout == NULL)
+		return 1;
+
+	value = atoi(conn->tcp_user_timeout);
+	if (value < 0)
+		return 1;
+
+	if (setsockopt(conn->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+				  (const char*) &value, sizeof (value)) < 0)
+	{
+		char sebuf[256];
+
+		if (errno == ENOPROTOOPT)
+		{
+			/*
+			 * Not implemented in this kernel version.  Disable the feature
+			 * silently.
+			 */
+			return 1;
+		}
+
+		appendPQExpBuffer(&conn->errorMessage,
+					  libpq_gettext("setsockopt(TCP_USER_TIMEOUT) failed: %s\n"),
+						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
+		return 0;
+	}
+
+	return 1;
+}
+#endif
+
+
 /* ----------
  * connectDBStart -
  *		Begin the process of making a connection to the backend.
@@ -1987,6 +2031,15 @@ keep_going:						/* We will come back to here until there is
 							conn->addr_cur = addr_cur->ai_next;
 							continue;
 						}
+
+#ifdef TCP_USER_TIMEOUT
+						if (!setTcpUserTimeout(conn))
+						{
+							pqDropConnection(conn, true);
+							conn->addr_cur = addr_cur->ai_next;
+							continue;
+						}
+#endif
 					}
 
 					/*----------

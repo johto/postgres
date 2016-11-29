@@ -167,6 +167,11 @@ typedef struct Port
 	int			keepalives_interval;
 	int			keepalives_count;
 
+	/*
+	 * TCP_USER_TIMEOUT setting.
+	 */
+	int			tcp_user_timeout;
+
 #if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
 
 	/*
@@ -215,14 +220,16 @@ extern void be_tls_get_peerdn_name(Port *port, char *ptr, size_t len);
 
 extern ProtocolVersion FrontendProtocol;
 
-/* TCP keepalives configuration. These are no-ops on an AF_UNIX socket. */
+/* TCP configuration. These are no-ops on an AF_UNIX socket. */
 
 extern int	pq_getkeepalivesidle(Port *port);
 extern int	pq_getkeepalivesinterval(Port *port);
 extern int	pq_getkeepalivescount(Port *port);
+extern int	pq_gettcpusertimeout(Port *port);
 
 extern int	pq_setkeepalivesidle(int idle, Port *port);
 extern int	pq_setkeepalivesinterval(int interval, Port *port);
-extern int	pq_setkeepalivescount(int count, Port *port);
+extern int	pq_setkeepalivescount(int interval, Port *port);
+extern int	pq_settcpusertimeout(int count, Port *port);
 
 #endif   /* LIBPQ_BE_H */

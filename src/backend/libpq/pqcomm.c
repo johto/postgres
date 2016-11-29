@@ -763,7 +763,7 @@ StreamConnection(pgsocket server_fd, Port *port)
 #endif
 
 		/*
-		 * Also apply the current keepalive parameters.  If we fail to set a
+		 * Also apply the current TCP parameters.  If we fail to set a
 		 * parameter, don't error out, because these aren't universally
 		 * supported.  (Note: you might think we need to reset the GUC
 		 * variables to 0 in such a case, but it's not necessary because the
@@ -772,6 +772,7 @@ StreamConnection(pgsocket server_fd, Port *port)
 		(void) pq_setkeepalivesidle(tcp_keepalives_idle, port);
 		(void) pq_setkeepalivesinterval(tcp_keepalives_interval, port);
 		(void) pq_setkeepalivescount(tcp_keepalives_count, port);
+		(void) pq_settcpusertimeout(tcp_user_timeout, port);
 	}
 
 	return STATUS_OK;
@@ -1888,5 +1889,49 @@ pq_setkeepalivescount(int count, Port *port)
 	}
 #endif
 
+	return STATUS_OK;
+}
+
+int
+pq_gettcpusertimeout(Port *port)
+{
+#ifdef TCP_USER_TIMEOUT
+	if (port == NULL || IS_AF_UNIX(port->laddr.addr.ss_family))
+		return 0;
+
+	if (port->tcp_user_timeout > 0)
+		return port->tcp_user_timeout;
+
+	return 0;
+#else
+	return 0;
+#endif
+}
+
+int
+pq_settcpusertimeout(int timeout, Port *port)
+{
+	if (port == NULL || IS_AF_UNIX(port->laddr.addr.ss_family))
+		return STATUS_OK;
+
+#ifdef TCP_USER_TIMEOUT
+	if (timeout == port->tcp_user_timeout)
+		return STATUS_OK;
+
+	if (setsockopt(port->sock, IPPROTO_TCP, TCP_KEEPCNT,
+				   (char *) &timeout, sizeof(timeout)) < 0)
+	{
+		elog(LOG, "setsockopt(TCP_KEEPCNT) failed: %m");
+		return STATUS_ERROR;
+	}
+
+	port->tcp_user_timeout = timeout;
+#else
+	if (timeout != 0)
+	{
+		elog(LOG, "setsockopt(TCP_KEEPCNT) not supported");
+		return STATUS_ERROR;
+	}
+#endif
 	return STATUS_OK;
 }

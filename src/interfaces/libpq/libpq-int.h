@@ -349,6 +349,7 @@ struct pg_conn
 										 * retransmits */
 	char	   *keepalives_count;		/* maximum number of TCP keepalive
 										 * retransmits */
+	char	   *tcp_user_timeout;	/* value for TCP_USER_TIMEOUT */
 	char	   *sslmode;		/* SSL mode (require,prefer,allow,disable) */
 	char	   *sslcompression; /* SSL compression (0 or 1) */
 	char	   *sslkey;			/* client key filename */
