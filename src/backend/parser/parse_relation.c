@@ -1318,6 +1318,85 @@ addRangeTableEntryForRelation(ParseState *pstate,
 }
 
 /*
+ * Add an entry for a pseudo-relation based on a real relation.
+ *
+ * Note that an alias clause must be supplied.
+ */
+RangeTblEntry *
+addRangeTableEntryForPseudoRelation(ParseState *pstate,
+									Relation rel,
+									Alias *alias,
+									bool inh,
+									bool inFromCl,
+									List **relTlist)
+{
+	RangeTblEntry *rte = NULL;
+	int relIndex;
+	Var *var;
+	TargetEntry *te;
+	int attno;
+
+	Assert(alias != NULL);
+
+	rte = addRangeTableEntryForRelation(pstate, rel, alias, inh, inFromCl);
+	rte->relkind = RELKIND_COMPOSITE_TYPE;
+
+	relIndex = list_length(pstate->p_rtable);
+
+	/*
+	 * Build a targetlist representing the columns of the relation.  Have to be
+	 * careful to use resnos that correspond to attnos of the underlying
+	 * relation.
+	 */
+	for (attno = 0; attno < rel->rd_rel->relnatts; attno++)
+	{
+		Form_pg_attribute attr = rel->rd_att->attrs[attno];
+		char	   *name;
+
+		if (attr->attisdropped)
+		{
+			/*
+			 * can't use atttypid here, but it doesn't really matter what
+			 * type the Const claims to be.
+			 */
+			var = (Var *) makeNullConst(INT4OID, -1, InvalidOid);
+			name = "";
+		}
+		else
+		{
+			var = makeVar(relIndex, attno + 1,
+						  attr->atttypid, attr->atttypmod,
+						  attr->attcollation,
+						  0);
+			name = pstrdup(NameStr(attr->attname));
+		}
+
+		te = makeTargetEntry((Expr *) var,
+							 attno + 1,
+							 name,
+							 false);
+
+		/* don't require select access; the caller should take care of that */
+		*relTlist = lappend(*relTlist, te);
+	}
+
+	/*
+	 * Add a whole-row-Var entry to support references to "<alias>.*".  Like
+	 * the other entries in the target list, its resno must match the Var's
+	 * varattno, else the wrong things happen while resolving references in
+	 * setrefs.c.  This is against normal conventions for targetlists, but it's
+	 * okay since we don't use this as a real tlist.
+	 */
+	var = makeVar(relIndex, InvalidAttrNumber,
+				  rel->rd_rel->reltype,
+				  -1, InvalidOid, 0);
+	te = makeTargetEntry((Expr *) var, InvalidAttrNumber, NULL, true);
+	*relTlist = lappend(*relTlist, te);
+	return rte;
+}
+
+
+/*
  * Add an entry for a subquery to the pstate's range table (p_rtable).
  *
  * This is just like addRangeTableEntry() except that it makes a subquery RTE.

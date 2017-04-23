@@ -72,6 +72,12 @@ extern RangeTblEntry *addRangeTableEntryForRelation(ParseState *pstate,
 							  Alias *alias,
 							  bool inh,
 							  bool inFromCl);
+extern RangeTblEntry *addRangeTableEntryForPseudoRelation(ParseState *pstate,
+							  Relation rel,
+							  Alias *alias,
+							  bool inh,
+							  bool inFromCl,
+							  List **relTlist);
 extern RangeTblEntry *addRangeTableEntryForSubquery(ParseState *pstate,
 							  Query *subquery,
 							  Alias *alias,
