@@ -1007,6 +1007,7 @@ static bool
 _equalInsertStmt(const InsertStmt *a, const InsertStmt *b)
 {
 	COMPARE_NODE_FIELD(relation);
+	COMPARE_SCALAR_FIELD(kind);
 	COMPARE_NODE_FIELD(cols);
 	COMPARE_NODE_FIELD(selectStmt);
 	COMPARE_NODE_FIELD(onConflictClause);

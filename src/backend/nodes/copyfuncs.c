@@ -2978,6 +2978,7 @@ _copyInsertStmt(const InsertStmt *from)
 	InsertStmt *newnode = makeNode(InsertStmt);
 
 	COPY_NODE_FIELD(relation);
+	COPY_SCALAR_FIELD(kind);
 	COPY_NODE_FIELD(cols);
 	COPY_NODE_FIELD(selectStmt);
 	COPY_NODE_FIELD(onConflictClause);

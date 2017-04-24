@@ -458,6 +458,7 @@ static Query *
 transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 {
 	Query	   *qry = makeNode(Query);
+	InsertKind	kind = stmt->kind;
 	SelectStmt *selectStmt = (SelectStmt *) stmt->selectStmt;
 	List	   *exprList = NIL;
 	bool		isGeneralSelect;
@@ -493,20 +494,20 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 						stmt->onConflictClause->action == ONCONFLICT_UPDATE);
 
 	/*
-	 * We have three cases to deal with: DEFAULT VALUES (selectStmt == NULL),
-	 * VALUES list, or general SELECT input.  We special-case VALUES, both for
-	 * efficiency and so we can handle DEFAULT specifications.
+	 * We have four cases to deal with: DEFAULT VALUES, VALUES list, list of
+	 * SET expressions, or general SELECT input.  We special-case VALUES, both
+	 * for efficiency and so we can handle DEFAULT specifications.
 	 *
 	 * The grammar allows attaching ORDER BY, LIMIT, FOR UPDATE, or WITH to a
 	 * VALUES clause.  If we have any of those, treat it as a general SELECT;
 	 * so it will work, but you can't use DEFAULT items together with those.
 	 */
-	isGeneralSelect = (selectStmt && (selectStmt->valuesLists == NIL ||
-									  selectStmt->sortClause != NIL ||
-									  selectStmt->limitOffset != NULL ||
-									  selectStmt->limitCount != NULL ||
-									  selectStmt->lockingClause != NIL ||
-									  selectStmt->withClause != NULL));
+	isGeneralSelect = (kind == INSERT_SELECT && (selectStmt->valuesLists == NIL ||
+												 selectStmt->sortClause != NIL ||
+												 selectStmt->limitOffset != NULL ||
+												 selectStmt->limitCount != NULL ||
+												 selectStmt->lockingClause != NIL ||
+												 selectStmt->withClause != NULL));
 
 	/*
 	 * If a non-nil rangetable/namespace was passed in, and we are doing
@@ -542,21 +543,28 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	qry->resultRelation = setTargetTable(pstate, stmt->relation,
 										 false, false, targetPerms);
 
-	/* Validate stmt->cols list, or build default list if no list given */
-	icolumns = checkInsertTargets(pstate, stmt->cols, &attrnos);
-	Assert(list_length(icolumns) == list_length(attrnos));
+	if (kind == INSERT_SET_LIST)
+	{
+		elog(ERROR, "not implemented");
+	}
+	else
+	{
+		/* Validate stmt->cols list, or build default list if no list given */
+		icolumns = checkInsertTargets(pstate, stmt->cols, &attrnos);
+		Assert(list_length(icolumns) == list_length(attrnos));
+	}
 
-	/*
-	 * Determine which variant of INSERT we have.
-	 */
-	if (selectStmt == NULL)
+	if (kind == INSERT_DEFAULT_VALUES)
 	{
 		/*
-		 * We have INSERT ... DEFAULT VALUES.  We can handle this case by
-		 * emitting an empty targetlist --- all columns will be defaulted when
-		 * the planner expands the targetlist.
+		 * We can handle this case by emitting an empty targetlist --- all
+		 * columns will be defaulted when the planner expands the targetlist.
 		 */
 		exprList = NIL;
+	}
+	else if (kind == INSERT_SET_LIST)
+	{
+		elog(ERROR, "TODO");
 	}
 	else if (isGeneralSelect)
 	{
@@ -655,7 +663,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 									  icolumns, attrnos,
 									  false);
 	}
-	else if (list_length(selectStmt->valuesLists) > 1)
+	else if (kind == INSERT_SELECT && list_length(selectStmt->valuesLists) > 1)
 	{
 		/*
 		 * Process INSERT ... VALUES with multiple VALUES sublists. We
@@ -785,7 +793,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 									  icolumns, attrnos,
 									  false);
 	}
-	else
+	else if (kind == INSERT_SELECT)
 	{
 		/*
 		 * Process INSERT ... VALUES with a single VALUES sublist.  We treat
@@ -812,6 +820,10 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 									  stmt->cols,
 									  icolumns, attrnos,
 									  false);
+	}
+	else
+	{
+		elog(ERROR, "unknown INSERT kind %d", (int) kind);
 	}
 
 	/*

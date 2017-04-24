@@ -1401,15 +1401,22 @@ typedef struct RawStmt
  *		Insert Statement
  *
  * The source expression is represented by SelectStmt for both the
- * SELECT and VALUES cases.  If selectStmt is NULL, then the query
- * is INSERT ... DEFAULT VALUES.
+ * SELECT and VALUES cases.
  * ----------------------
  */
+typedef enum {
+	INSERT_DEFAULT_VALUES,		/* cols and selectStmt both NULL */
+	INSERT_SELECT,				/* cols optionally the names of the target columns */
+	INSERT_SET_LIST,			/* cols is a target list, selectStmt NULL */
+	INSERT_SET_FROM				/* XXX TODO */
+} InsertKind;
+
 typedef struct InsertStmt
 {
 	NodeTag		type;
 	RangeVar   *relation;		/* relation to insert into */
-	List	   *cols;			/* optional: names of the target columns */
+	InsertKind	kind;			/* */
+	List	   *cols;			/* names of the target columns or a target list */
 	Node	   *selectStmt;		/* the source SELECT/VALUES, or NULL */
 	OnConflictClause *onConflictClause; /* ON CONFLICT clause */
 	List	   *returningList;	/* list of expressions to return */

@@ -10514,12 +10514,14 @@ insert_rest:
 			SelectStmt
 				{
 					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SELECT;
 					$$->cols = NIL;
 					$$->selectStmt = $1;
 				}
 			| OVERRIDING override_kind VALUE_P SelectStmt
 				{
 					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SELECT;
 					$$->cols = NIL;
 					$$->override = $2;
 					$$->selectStmt = $4;
@@ -10527,19 +10529,37 @@ insert_rest:
 			| '(' insert_column_list ')' SelectStmt
 				{
 					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SELECT;
 					$$->cols = $2;
 					$$->selectStmt = $4;
 				}
 			| '(' insert_column_list ')' OVERRIDING override_kind VALUE_P SelectStmt
 				{
 					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SELECT;
 					$$->cols = $2;
 					$$->override = $5;
 					$$->selectStmt = $7;
 				}
+			| OVERRIDING override_kind SET set_clause_list
+				{
+					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SET_LIST;
+					$$->cols = $4;
+					$$->override = $2;
+					$$->selectStmt = NULL;
+				}
+			| SET set_clause_list
+				{
+					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_SET_LIST;
+					$$->cols = $2;
+					$$->selectStmt = NULL;
+				}
 			| DEFAULT VALUES
 				{
 					$$ = makeNode(InsertStmt);
+                    $$->kind = INSERT_DEFAULT_VALUES;
 					$$->cols = NIL;
 					$$->selectStmt = NULL;
 				}
