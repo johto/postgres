@@ -10523,6 +10523,21 @@ insert_column_item:
 		;
 
 opt_on_conflict:
+			ON CONFLICT opt_conf_expr DO SELECT opt_for_locking_clause where_clause
+				{
+					if ($6 != NIL)
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("row-level locking with DO SELECT is not supported"),
+								 parser_errposition(@6)));
+					$$ = makeNode(OnConflictClause);
+					$$->action = ONCONFLICT_SELECT;
+					$$->infer = $3;
+					$$->targetList = NIL;
+					$$->whereClause = $7;
+					$$->location = @1;
+				}
+			|
 			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list	where_clause
 				{
 					$$ = makeNode(OnConflictClause);

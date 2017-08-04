@@ -62,6 +62,15 @@ static bool ExecOnConflictUpdate(ModifyTableState *mtstate,
 					 EState *estate,
 					 bool canSetTag,
 					 TupleTableSlot **returning);
+static bool ExecOnConflictSelect(ModifyTableState *mtstate,
+					 ResultRelInfo *resultRelInfo,
+					 ItemPointer conflictTid,
+					 TupleTableSlot *planSlot,
+					 TupleTableSlot *excludedSlot,
+					 EState *estate,
+					 bool canSetTag,
+					 TupleTableSlot **returning);
+
 
 /*
  * Verify that the tuples to be produced by INSERT or UPDATE match the
@@ -528,6 +537,25 @@ ExecInsert(ModifyTableState *mtstate,
 					else
 						goto vlock;
 				}
+				else if (onconflict == ONCONFLICT_SELECT)
+				{
+					/*
+					 * In case of ON CONFLICT DO SELECT, simply fetch the
+					 * conflicting tuple and project RETURNING on it.
+					 */
+					TupleTableSlot *returning = NULL;
+
+					if (ExecOnConflictSelect(mtstate, resultRelInfo,
+											 &conflictTid, planSlot, slot,
+											 estate, canSetTag, &returning))
+					{
+						InstrCountFiltered2(&mtstate->ps, 1);
+						return returning;
+					}
+					else
+						goto vlock;
+				}
+
 				else
 				{
 					/*
@@ -1373,6 +1401,65 @@ ExecOnConflictUpdate(ModifyTableState *mtstate,
 	return true;
 }
 
+static bool
+ExecOnConflictSelect(ModifyTableState *mtstate,
+					 ResultRelInfo *resultRelInfo,
+					 ItemPointer conflictTid,
+					 TupleTableSlot *planSlot,
+					 TupleTableSlot *excludedSlot,
+					 EState *estate,
+					 bool canSetTag,
+					 TupleTableSlot **returning)
+{
+	ExprContext *econtext = mtstate->ps.ps_ExprContext;
+	Relation	relation = resultRelInfo->ri_RelationDesc;
+	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictSetWhere;
+	HeapTupleData tuple;
+	Buffer		buffer;
+
+	tuple.t_self = *conflictTid;
+	if (!heap_fetch(relation, SnapshotAny, &tuple, &buffer, false, relation))
+		return false;
+
+	/*
+	 * Reset per-tuple memory context to free any expression evaluation
+	 * storage allocated in the previous cycle.
+	 */
+	ResetExprContext(econtext);
+
+	/*
+	 * For the same reasons as ExecOnConflictUpdate, we must verify that the
+	 * tuple is visible to our snapshot.
+	 */
+	ExecCheckHeapTupleVisible(estate, &tuple, buffer);
+
+	/* Store target's existing tuple in the state's dedicated slot */
+	ExecStoreTuple(&tuple, mtstate->mt_existing, buffer, false);
+
+	/*
+	 * Make tuple and any needed join variables available to ExecQual and
+	 * ExecProject.  The EXCLUDED tuple is installed in ecxt_innertuple, while
+	 * the target's existing tuple is installed in the scantuple.  EXCLUDED
+	 * has been made to reference INNER_VAR in setrefs.c, but there is no
+	 * other redirection.
+	 */
+	econtext->ecxt_scantuple = mtstate->mt_existing;
+	econtext->ecxt_innertuple = excludedSlot;
+	econtext->ecxt_outertuple = NULL;
+
+	if (!ExecQual(onConflictSetWhere, econtext))
+	{
+		ReleaseBuffer(buffer);
+		InstrCountFiltered1(&mtstate->ps, 1);
+		return true;			/* done with the tuple */
+	}
+
+	*returning = ExecProcessReturning(resultRelInfo, mtstate->mt_existing, planSlot);
+
+	ReleaseBuffer(buffer);
+	return true;
+}
+
 
 /*
  * Process BEFORE EACH STATEMENT triggers
@@ -2133,6 +2220,25 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 									resultRelInfo->ri_RelationDesc->rd_att);
 
 		/* build DO UPDATE WHERE clause expression */
+		if (node->onConflictWhere)
+		{
+			ExprState  *qualexpr;
+
+			qualexpr = ExecInitQual((List *) node->onConflictWhere,
+									&mtstate->ps);
+
+			resultRelInfo->ri_onConflictSetWhere = qualexpr;
+		}
+	}
+	else if (node->onConflictAction == ONCONFLICT_SELECT)
+	{
+		ExecAssignExprContext(estate, &mtstate->ps);
+
+		/* initialize slot for the existing tuple */
+		mtstate->mt_existing = ExecInitExtraTupleSlot(mtstate->ps.state);
+		ExecSetSlotDescriptor(mtstate->mt_existing,
+							  resultRelInfo->ri_RelationDesc->rd_att);
+
 		if (node->onConflictWhere)
 		{
 			ExprState  *qualexpr;
