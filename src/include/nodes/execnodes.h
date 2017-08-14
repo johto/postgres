@@ -402,7 +402,7 @@ typedef struct ResultRelInfo
 	ProjectionInfo *ri_onConflictSetProj;
 
 	/* list of ON CONFLICT DO SELECT/UPDATE exprs (qual) */
-	ExprState  *ri_onConflictSetWhere;
+	ExprState  *ri_onConflictActionWhere;
 
 	/* partition check expression */
 	List	   *ri_PartitionCheck;

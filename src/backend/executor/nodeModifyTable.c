@@ -1229,7 +1229,7 @@ ExecOnConflictUpdate(ModifyTableState *mtstate,
 {
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
 	Relation	relation = resultRelInfo->ri_RelationDesc;
-	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictSetWhere;
+	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictActionWhere;
 	HeapTupleData tuple;
 	HeapUpdateFailureData hufd;
 	LockTupleMode lockmode;
@@ -1409,7 +1409,7 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 {
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
 	Relation	relation = resultRelInfo->ri_RelationDesc;
-	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictSetWhere;
+	ExprState  *inConflictSelectWhere = resultRelInfo->ri_onConflictActionWhere;
 	HeapTupleData tuple;
 	Buffer		buffer;
 
@@ -1440,7 +1440,7 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 	econtext->ecxt_innertuple = NULL;
 	econtext->ecxt_outertuple = NULL;
 
-	if (!ExecQual(onConflictSetWhere, econtext))
+	if (!ExecQual(onConflictSelectWhere, econtext))
 	{
 		ReleaseBuffer(buffer);
 		InstrCountFiltered1(&mtstate->ps, 1);
@@ -2220,7 +2220,7 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			qualexpr = ExecInitQual((List *) node->onConflictWhere,
 									&mtstate->ps);
 
-			resultRelInfo->ri_onConflictSetWhere = qualexpr;
+			resultRelInfo->ri_onConflictActionWhere = qualexpr;
 		}
 	}
 	else if (node->onConflictAction == ONCONFLICT_SELECT)
@@ -2240,7 +2240,7 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			qualexpr = ExecInitQual((List *) node->onConflictWhere,
 									&mtstate->ps);
 
-			resultRelInfo->ri_onConflictSetWhere = qualexpr;
+			resultRelInfo->ri_onConflictActionWhere = qualexpr;
 		}
 	}
 
