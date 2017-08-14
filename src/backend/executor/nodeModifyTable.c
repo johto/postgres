@@ -2225,7 +2225,9 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	}
 	else if (node->onConflictAction == ONCONFLICT_SELECT)
 	{
-		ExecAssignExprContext(estate, &mtstate->ps);
+		/* already exists if created by RETURNING processing above */
+		if (mtstate->ps.ps_ExprContext == NULL)
+			ExecAssignExprContext(estate, &mtstate->ps);
 
 		/* initialize slot for the existing tuple */
 		mtstate->mt_existing = ExecInitExtraTupleSlot(mtstate->ps.state);
