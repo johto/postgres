@@ -1409,7 +1409,7 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 {
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
 	Relation	relation = resultRelInfo->ri_RelationDesc;
-	ExprState  *inConflictSelectWhere = resultRelInfo->ri_onConflictActionWhere;
+	ExprState  *onConflictSelectWhere = resultRelInfo->ri_onConflictActionWhere;
 	HeapTupleData tuple;
 	Buffer		buffer;
 
