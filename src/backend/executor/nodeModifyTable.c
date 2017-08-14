@@ -66,7 +66,6 @@ static bool ExecOnConflictSelect(ModifyTableState *mtstate,
 					 ResultRelInfo *resultRelInfo,
 					 ItemPointer conflictTid,
 					 TupleTableSlot *planSlot,
-					 TupleTableSlot *excludedSlot,
 					 EState *estate,
 					 TupleTableSlot **returning);
 
@@ -545,7 +544,7 @@ ExecInsert(ModifyTableState *mtstate,
 					TupleTableSlot *returning = NULL;
 
 					if (ExecOnConflictSelect(mtstate, resultRelInfo,
-											 &conflictTid, planSlot, slot,
+											 &conflictTid, planSlot,
 											 estate, &returning))
 					{
 						InstrCountFiltered2(&mtstate->ps, 1);
@@ -1405,7 +1404,6 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 					 ResultRelInfo *resultRelInfo,
 					 ItemPointer conflictTid,
 					 TupleTableSlot *planSlot,
-					 TupleTableSlot *excludedSlot,
 					 EState *estate,
 					 TupleTableSlot **returning)
 {
@@ -1435,14 +1433,11 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 	ExecStoreTuple(&tuple, mtstate->mt_existing, buffer, false);
 
 	/*
-	 * Make tuple and any needed join variables available to ExecQual and
-	 * ExecProject.  The EXCLUDED tuple is installed in ecxt_innertuple, while
-	 * the target's existing tuple is installed in the scantuple.  EXCLUDED
-	 * has been made to reference INNER_VAR in setrefs.c, but there is no
-	 * other redirection.
+	 * Make the tuple available to ExecQual and ExecProject.  EXCLUDED is not
+	 * used at all.
 	 */
 	econtext->ecxt_scantuple = mtstate->mt_existing;
-	econtext->ecxt_innertuple = excludedSlot;
+	econtext->ecxt_innertuple = NULL;
 	econtext->ecxt_outertuple = NULL;
 
 	if (!ExecQual(onConflictSetWhere, econtext))
