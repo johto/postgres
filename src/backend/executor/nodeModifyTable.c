@@ -68,7 +68,6 @@ static bool ExecOnConflictSelect(ModifyTableState *mtstate,
 					 TupleTableSlot *planSlot,
 					 TupleTableSlot *excludedSlot,
 					 EState *estate,
-					 bool canSetTag,
 					 TupleTableSlot **returning);
 
 
@@ -547,7 +546,7 @@ ExecInsert(ModifyTableState *mtstate,
 
 					if (ExecOnConflictSelect(mtstate, resultRelInfo,
 											 &conflictTid, planSlot, slot,
-											 estate, canSetTag, &returning))
+											 estate, &returning))
 					{
 						InstrCountFiltered2(&mtstate->ps, 1);
 						return returning;
@@ -1408,7 +1407,6 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 					 TupleTableSlot *planSlot,
 					 TupleTableSlot *excludedSlot,
 					 EState *estate,
-					 bool canSetTag,
 					 TupleTableSlot **returning)
 {
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
