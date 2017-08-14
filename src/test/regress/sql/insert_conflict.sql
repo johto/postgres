@@ -99,7 +99,7 @@ on conflict (key) do update set (fruit, key) = (excluded.fruit, excluded.key);
 
 -- DO SELECT
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do select returning *;
-insert into insertconflicttest values (1, 'Apple') on conflict (key) do select where key <> 'Apple' returning *;
+insert into insertconflicttest values (1, 'Apple') on conflict (key) do select where fruit <> 'Apple' returning *;
 
 -- Give good diagnostic message when EXCLUDED.* spuriously referenced from
 -- RETURNING:

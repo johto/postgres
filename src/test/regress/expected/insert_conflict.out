@@ -243,11 +243,10 @@ insert into insertconflicttest values (1, 'Apple') on conflict (key) do select r
    1 | Apple
 (1 row)
 
-insert into insertconflicttest values (1, 'Apple') on conflict (key) do select where key <> 'Apple' returning *;
+insert into insertconflicttest values (1, 'Apple') on conflict (key) do select where fruit <> 'Apple' returning *;
  key | fruit 
 -----+-------
-   1 | Apple
-(1 row)
+(0 rows)
 
 -- Give good diagnostic message when EXCLUDED.* spuriously referenced from
 -- RETURNING:

@@ -1110,6 +1110,13 @@ transformOnConflictClause(ParseState *pstate,
 	}
 	else if (onConflictClause->action == ONCONFLICT_SELECT)
 	{
+		/*
+		 * References to EXCLUDED are not allowed, but we need the main
+		 * relation to be visible to the WHERE clause.
+		 */
+		addRTEtoQuery(pstate, pstate->p_target_rangetblentry,
+					  false, true, true);
+
 		onConflictWhere = transformWhereClause(pstate,
 											   onConflictClause->whereClause,
 											   EXPR_KIND_WHERE, "WHERE");
