@@ -1108,6 +1108,12 @@ transformOnConflictClause(ParseState *pstate,
 											   onConflictClause->whereClause,
 											   EXPR_KIND_WHERE, "WHERE");
 	}
+	else if (onConflictClause->action == ONCONFLICT_SELECT)
+	{
+		onConflictWhere = transformWhereClause(pstate,
+											   onConflictClause->whereClause,
+											   EXPR_KIND_WHERE, "WHERE");
+	}
 
 	/* Finally, build ON CONFLICT DO [NOTHING | UPDATE] expression */
 	result = makeNode(OnConflictExpr);

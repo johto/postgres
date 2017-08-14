@@ -2237,6 +2237,7 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 		ExecSetSlotDescriptor(mtstate->mt_existing,
 							  resultRelInfo->ri_RelationDesc->rd_att);
 
+		/* build DO SELECT WHERE clause expression */
 		if (node->onConflictWhere)
 		{
 			ExprState  *qualexpr;
