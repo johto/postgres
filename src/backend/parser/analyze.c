@@ -470,8 +470,8 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	ListCell   *icols;
 	ListCell   *attnos;
 	ListCell   *lc;
+	bool		isOnConflictUpdate;
 	AclMode		targetPerms;
-	AclMode		onConflictPerms = 0;
 
 	/* There can't be any outer WITH to worry about */
 	Assert(pstate->p_ctenamespace == NIL);
@@ -489,13 +489,8 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 
 	qry->override = stmt->override;
 
-	if (stmt->onConflictClause)
-	{
-		if (stmt->onConflictClause->action == ONCONFLICT_UPDATE)
-			onConflictPerms = ACL_UPDATE;
-		else if (stmt->onConflictClause->action == ONCONFLICT_SELECT)
-			onConflictPerms = ACL_SELECT;
-	}
+	isOnConflictUpdate = (stmt->onConflictClause &&
+						  stmt->onConflictClause->action == ONCONFLICT_UPDATE);
 
 	/*
 	 * We have three cases to deal with: DEFAULT VALUES (selectStmt == NULL),
@@ -541,7 +536,9 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	 * mentioned in the SELECT part.  Note that the target table is not added
 	 * to the joinlist or namespace.
 	 */
-	targetPerms = ACL_INSERT | targetPerms;
+	targetPerms = ACL_INSERT;
+	if (isOnConflictUpdate)
+		targetPerms |= ACL_UPDATE;
 	qry->resultRelation = setTargetTable(pstate, stmt->relation,
 										 false, false, targetPerms);
 
