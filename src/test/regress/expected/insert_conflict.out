@@ -244,12 +244,24 @@ insert into insertconflicttest values (1, 'Apple') on conflict (key) do select r
    1 | Apple
 (1 row)
 
+insert into insertconflicttest values (1, 'Apple') on conflict (key) do select returning *;
+ key | fruit 
+-----+-------
+   1 | Apple
+(1 row)
+
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do select where fruit <> 'Apple' returning *;
  key | fruit 
 -----+-------
 (0 rows)
 
 delete from insertconflicttest where fruit = 'Apple';
+insert into insertconflicttest values (1, 'Apple') on conflict (key) do select for update returning *;
+ key | fruit 
+-----+-------
+   1 | Apple
+(1 row)
+
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do select for update returning *;
  key | fruit 
 -----+-------
