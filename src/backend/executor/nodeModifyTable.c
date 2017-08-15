@@ -54,6 +54,13 @@
 #include "utils/tqual.h"
 
 
+static bool
+ExecOnConflictLockRow(ModifyTableState *mtstate,
+					 Relation relation,
+					 LockTupleMode lockmode,
+					 HeapTuple tuple,
+					 Buffer *buffer,
+					 EState *estate);
 static bool ExecOnConflictUpdate(ModifyTableState *mtstate,
 					 ResultRelInfo *resultRelInfo,
 					 ItemPointer conflictTid,
@@ -1206,48 +1213,24 @@ lreplace:;
 	return NULL;
 }
 
-/*
- * ExecOnConflictUpdate --- execute UPDATE of INSERT ON CONFLICT DO UPDATE
- *
- * Try to lock tuple for update as part of speculative insertion.  If
- * a qual originating from ON CONFLICT DO UPDATE is satisfied, update
- * (but still lock row, even though it may not satisfy estate's
- * snapshot).
- *
- * Returns true if if we're done (with or without an update), or false if
- * the caller must retry the INSERT from scratch.
- */
 static bool
-ExecOnConflictUpdate(ModifyTableState *mtstate,
-					 ResultRelInfo *resultRelInfo,
-					 ItemPointer conflictTid,
-					 TupleTableSlot *planSlot,
-					 TupleTableSlot *excludedSlot,
-					 EState *estate,
-					 bool canSetTag,
-					 TupleTableSlot **returning)
+ExecOnConflictLockRow(ModifyTableState *mtstate,
+					 Relation relation,
+					 LockTupleMode lockmode,
+					 HeapTuple tuple,
+					 Buffer *buffer,
+					 EState *estate)
 {
-	ExprContext *econtext = mtstate->ps.ps_ExprContext;
-	Relation	relation = resultRelInfo->ri_RelationDesc;
-	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictActionWhere;
-	HeapTupleData tuple;
 	HeapUpdateFailureData hufd;
-	LockTupleMode lockmode;
 	HTSU_Result test;
-	Buffer		buffer;
-
-	/* Determine lock mode to use */
-	lockmode = ExecUpdateLockMode(estate, resultRelInfo);
 
 	/*
-	 * Lock tuple for update.  Don't follow updates when tuple cannot be
-	 * locked without doing so.  A row locking conflict here means our
-	 * previous conclusion that the tuple is conclusively committed is not
-	 * true anymore.
+	 * Don't follow updates when tuple cannot be locked without doing so.  A
+	 * row locking conflict here means our previous conclusion that the tuple
+	 * is conclusively committed is not true anymore.
 	 */
-	tuple.t_self = *conflictTid;
-	test = heap_lock_tuple(relation, &tuple, estate->es_output_cid,
-						   lockmode, LockWaitBlock, false, &buffer,
+	test = heap_lock_tuple(relation, tuple, estate->es_output_cid,
+						   lockmode, LockWaitBlock, false, buffer,
 						   &hufd);
 	switch (test)
 	{
@@ -1273,10 +1256,10 @@ ExecOnConflictUpdate(ModifyTableState *mtstate,
 			 * that for SQL MERGE, an exception must be raised in the event of
 			 * an attempt to update the same row twice.
 			 */
-			if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(tuple.t_data)))
+			if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(tuple->t_data)))
 				ereport(ERROR,
 						(errcode(ERRCODE_CARDINALITY_VIOLATION),
-						 errmsg("ON CONFLICT DO UPDATE command cannot affect row a second time"),
+						 errmsg("ON CONFLICT command cannot affect row a second time"),
 						 errhint("Ensure that no rows proposed for insertion within the same command have duplicate constrained values.")));
 
 			/* This shouldn't happen */
@@ -1304,12 +1287,56 @@ ExecOnConflictUpdate(ModifyTableState *mtstate,
 			 * loop here, as the new version of the row might not conflict
 			 * anymore, or the conflicting tuple has actually been deleted.
 			 */
-			ReleaseBuffer(buffer);
+			ReleaseBuffer(*buffer);
 			return false;
 
 		default:
 			elog(ERROR, "unrecognized heap_lock_tuple status: %u", test);
 	}
+
+	return true;
+}
+
+
+/*
+ * ExecOnConflictUpdate --- execute UPDATE of INSERT ON CONFLICT DO UPDATE
+ *
+ * Try to lock tuple for update as part of speculative insertion.  If
+ * a qual originating from ON CONFLICT DO UPDATE is satisfied, update
+ * (but still lock row, even though it may not satisfy estate's
+ * snapshot).
+ *
+ * Returns true if if we're done (with or without an update), or false if
+ * the caller must retry the INSERT from scratch.
+ */
+static bool
+ExecOnConflictUpdate(ModifyTableState *mtstate,
+					 ResultRelInfo *resultRelInfo,
+					 ItemPointer conflictTid,
+					 TupleTableSlot *planSlot,
+					 TupleTableSlot *excludedSlot,
+					 EState *estate,
+					 bool canSetTag,
+					 TupleTableSlot **returning)
+{
+	ExprContext *econtext = mtstate->ps.ps_ExprContext;
+	ExprState  *onConflictSetWhere = resultRelInfo->ri_onConflictActionWhere;
+	HeapTupleData tuple;
+	LockTupleMode lockmode;
+	Buffer		buffer;
+
+	/* Determine lock mode to use */
+	lockmode = ExecUpdateLockMode(estate, resultRelInfo);
+
+	/*
+	 * Lock tuple for update.  Don't follow updates when tuple cannot be
+	 * locked without doing so.  A row locking conflict here means our
+	 * previous conclusion that the tuple is conclusively committed is not
+	 * true anymore.
+	 */
+	tuple.t_self = *conflictTid;
+	if (!ExecOnConflictLockRow(mtstate, resultRelInfo->ri_RelationDesc, lockmode, &tuple, &buffer, estate))
+		return false;
 
 	/*
 	 * Success, the tuple is locked.
@@ -1410,12 +1437,40 @@ ExecOnConflictSelect(ModifyTableState *mtstate,
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
 	Relation	relation = resultRelInfo->ri_RelationDesc;
 	ExprState  *onConflictSelectWhere = resultRelInfo->ri_onConflictActionWhere;
+	LockClauseStrength lockstrength = resultRelInfo->ri_onConflictLockingStrength;
 	HeapTupleData tuple;
 	Buffer		buffer;
 
 	tuple.t_self = *conflictTid;
-	if (!heap_fetch(relation, SnapshotAny, &tuple, &buffer, false, relation))
-		return false;
+	if (lockstrength != LCS_NONE)
+	{
+		LockTupleMode lockmode;
+
+		switch (lockstrength)
+		{
+			case LCS_FORKEYSHARE:
+				lockmode = LockTupleKeyShare;
+				break;
+			case LCS_FORSHARE:
+				lockmode = LockTupleShare;
+				break;
+			case LCS_FORNOKEYUPDATE:
+				lockmode = LockTupleNoKeyExclusive;
+				break;
+			case LCS_FORUPDATE:
+				lockmode = LockTupleExclusive;
+				break;
+			default:
+				elog(ERROR, "unexpected lock strength %d", lockstrength);
+		}
+		if (!ExecOnConflictLockRow(mtstate, resultRelInfo->ri_RelationDesc, lockmode, &tuple, &buffer, estate))
+			return false;
+	}
+	else
+	{
+		if (!heap_fetch(relation, SnapshotAny, &tuple, &buffer, false, relation))
+			return false;
+	}
 
 	/*
 	 * Reset per-tuple memory context to free any expression evaluation
@@ -2244,6 +2299,8 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 
 			resultRelInfo->ri_onConflictActionWhere = qualexpr;
 		}
+
+		resultRelInfo->ri_onConflictLockingStrength = node->onConflictLockingStrength;
 	}
 
 	/*

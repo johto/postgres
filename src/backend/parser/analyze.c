@@ -1122,15 +1122,16 @@ transformOnConflictClause(ParseState *pstate,
 											   EXPR_KIND_WHERE, "WHERE");
 	}
 
-	/* Finally, build ON CONFLICT DO [NOTHING | UPDATE] expression */
+	/* Finally, build ON CONFLICT DO [NOTHING | SELECT | UPDATE] expression */
 	result = makeNode(OnConflictExpr);
 
 	result->action = onConflictClause->action;
 	result->arbiterElems = arbiterElems;
 	result->arbiterWhere = arbiterWhere;
 	result->constraint = arbiterConstraint;
-	result->onConflictSet = onConflictSet;
 	result->onConflictWhere = onConflictWhere;
+	result->lockingStrength = onConflictClause->lockingStrength;
+	result->onConflictSet = onConflictSet;
 	result->exclRelIndex = exclRelIndex;
 	result->exclRelTlist = exclRelTlist;
 

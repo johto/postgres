@@ -404,6 +404,9 @@ typedef struct ResultRelInfo
 	/* list of ON CONFLICT DO SELECT/UPDATE exprs (qual) */
 	ExprState  *ri_onConflictActionWhere;
 
+	/* strengh of lock for ON CONFLICT DO SELECT, or LCS_NONE */
+	LockClauseStrength ri_onConflictLockingStrength;
+
 	/* partition check expression */
 	List	   *ri_PartitionCheck;
 

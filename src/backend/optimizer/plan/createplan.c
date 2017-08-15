@@ -6434,6 +6434,7 @@ make_modifytable(PlannerInfo *root,
 		node->onConflictAction = ONCONFLICT_NONE;
 		node->onConflictSet = NIL;
 		node->onConflictWhere = NULL;
+		node->onConflictLockingStrength = LCS_NONE;
 		node->arbiterIndexes = NIL;
 		node->exclRelRTI = 0;
 		node->exclRelTlist = NIL;
@@ -6443,6 +6444,7 @@ make_modifytable(PlannerInfo *root,
 		node->onConflictAction = onconflict->action;
 		node->onConflictSet = onconflict->onConflictSet;
 		node->onConflictWhere = onconflict->onConflictWhere;
+		node->onConflictLockingStrength = onconflict->lockingStrength;
 
 		/*
 		 * If a set of unique index inference elements was provided (an
