@@ -1213,6 +1213,9 @@ lreplace:;
 	return NULL;
 }
 
+/*
+ * ExecOnConflictLockRow --- lock the row for ON CONFLICT DO UPDATE/SELECT
+ */
 static bool
 ExecOnConflictLockRow(ModifyTableState *mtstate,
 					 Relation relation,
@@ -1426,6 +1429,12 @@ ExecOnConflictUpdate(ModifyTableState *mtstate,
 	return true;
 }
 
+/*
+ * ExecOnConflictSelect --- execute SELECT of INSERT ON CONFLICT DO UPDATE
+ *
+ * Returns true if if we're done (with or without an update), or false if the
+ * caller must retry the INSERT from scratch.
+ */
 static bool
 ExecOnConflictSelect(ModifyTableState *mtstate,
 					 ResultRelInfo *resultRelInfo,
