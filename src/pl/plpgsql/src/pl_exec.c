@@ -208,6 +208,12 @@ static void free_params_data(PreparedParamsData *ppd);
 static Portal exec_dynquery_with_params(PLpgSQL_execstate *estate,
 						  PLpgSQL_expr *dynquery, List *params,
 						  const char *portalname, int cursorOptions);
+static char *
+format_expr_params(PLpgSQL_execstate *estate,
+				   const PLpgSQL_expr *expr);
+static char *
+format_preparedparamsdata(PLpgSQL_execstate *estate,
+						  const PreparedParamsData *ppd);
 
 
 /* ----------
@@ -3122,18 +3128,32 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		if (n == 0)
 		{
 			if (stmt->strict)
+			{
+				char *errdetail = format_expr_params(estate, expr);
+
+				/* print a WARNING to make sure we get the stack trace */
+				elog(WARNING, "ERRCODE_NO_DATA_FOUND; parameters: %s", errdetail);
+
 				ereport(ERROR,
 						(errcode(ERRCODE_NO_DATA_FOUND),
 						 errmsg("query returned no rows")));
+			}
 			/* set the target to NULL(s) */
 			exec_move_row(estate, rec, row, NULL, tuptab->tupdesc);
 		}
 		else
 		{
 			if (n > 1 && (stmt->strict || stmt->mod_stmt))
+			{
+				char *errdetail = format_expr_params(estate, expr);
+
+				/* print a WARNING to make sure we get the stack trace */
+				elog(WARNING, "ERRCODE_TOO_MANY_ROWS; parameters: %s", errdetail);
+
 				ereport(ERROR,
 						(errcode(ERRCODE_TOO_MANY_ROWS),
 						 errmsg("query returned more than one row")));
+			}
 			/* Put the first result row into the target */
 			exec_move_row(estate, rec, row, tuptab->vals[0], tuptab->tupdesc);
 		}
@@ -3173,6 +3193,7 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 	Oid			restype;
 	char	   *querystr;
 	int			exec_res;
+	PreparedParamsData *ppd = NULL;
 
 	/*
 	 * First we evaluate the string expression after the EXECUTE keyword. Its
@@ -3197,14 +3218,11 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 	 */
 	if (stmt->params)
 	{
-		PreparedParamsData *ppd;
-
 		ppd = exec_eval_using_params(estate, stmt->params);
 		exec_res = SPI_execute_with_args(querystr,
 										 ppd->nargs, ppd->types,
 										 ppd->values, ppd->nulls,
 										 estate->readonly_func, 0);
-		free_params_data(ppd);
 	}
 	else
 		exec_res = SPI_execute(querystr, estate->readonly_func, 0);
@@ -3306,18 +3324,32 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 		if (n == 0)
 		{
 			if (stmt->strict)
+			{
+				char *errdetail = format_preparedparamsdata(estate, ppd);
+
+				/* print a WARNING to make sure we get the stack trace */
+				elog(WARNING, "ERRCODE_NO_DATA_FOUND; parameters: %s", errdetail);
+
 				ereport(ERROR,
 						(errcode(ERRCODE_NO_DATA_FOUND),
 						 errmsg("query returned no rows")));
+			}
 			/* set the target to NULL(s) */
 			exec_move_row(estate, rec, row, NULL, tuptab->tupdesc);
 		}
 		else
 		{
 			if (n > 1 && stmt->strict)
+			{
+				char *errdetail = format_preparedparamsdata(estate, ppd);
+
+				/* print a WARNING to make sure we get the stack trace */
+				elog(WARNING, "ERRCODE_TOO_MANY_ROWS; parameters: %s", errdetail);
+
 				ereport(ERROR,
 						(errcode(ERRCODE_TOO_MANY_ROWS),
 						 errmsg("query returned more than one row")));
+			}
 			/* Put the first result row into the target */
 			exec_move_row(estate, rec, row, tuptab->vals[0], tuptab->tupdesc);
 		}
@@ -3332,6 +3364,9 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 		 * that.
 		 */
 	}
+
+	if (ppd)
+		free_params_data(ppd);
 
 	/* Release any result from SPI_execute, as well as the querystring */
 	SPI_freetuptable(SPI_tuptable);
@@ -5974,4 +6009,105 @@ exec_dynquery_with_params(PLpgSQL_execstate *estate,
 	pfree(querystr);
 
 	return portal;
+}
+
+
+/*
+ * Return a formatted string with information about an expression's parameters,
+ * or NULL if the expression does not take any parameters.
+ */
+static char *
+format_expr_params(PLpgSQL_execstate *estate,
+				   const PLpgSQL_expr *expr)
+{
+	int paramno;
+	int dno;
+	StringInfoData paramstr;
+	Bitmapset *tmpset;
+
+	if (!expr->paramnos)
+		return NULL;
+
+	initStringInfo(&paramstr);
+	tmpset = bms_copy(expr->paramnos);
+	paramno = 0;
+	while ((dno = bms_first_member(tmpset)) >= 0)
+	{
+		Datum paramdatum;
+		Oid paramtypeid;
+		bool paramisnull;
+		int32 paramtypmod;
+		PLpgSQL_var *curvar;
+
+		curvar = (PLpgSQL_var *) estate->datums[dno];
+
+		exec_eval_datum(estate, (PLpgSQL_datum *) curvar, &paramtypeid,
+						&paramtypmod, &paramdatum, &paramisnull);
+
+		appendStringInfo(&paramstr, "%s%s = ",
+						 paramno > 0 ? ", " : "",
+						 curvar->refname);
+
+		if (paramisnull)
+			appendStringInfoString(&paramstr, "NULL");
+		else
+		{
+			char *value = convert_value_to_string(estate, paramdatum, paramtypeid);
+			char *p;
+			appendStringInfoCharMacro(&paramstr, '\'');
+			for (p = value; *p; p++)
+			{
+				if (*p == '\'') /* double single quotes */
+					appendStringInfoCharMacro(&paramstr, *p);
+				appendStringInfoCharMacro(&paramstr, *p);
+			}
+			appendStringInfoCharMacro(&paramstr, '\'');
+		}
+
+		paramno++;
+	}
+	bms_free(tmpset);
+
+	return paramstr.data;
+}
+
+/*
+ * Return a formatted string with information about PreparedParamsData, or NULL
+ * if the there are no parameters.
+ */
+static char *
+format_preparedparamsdata(PLpgSQL_execstate *estate,
+						  const PreparedParamsData *ppd)
+{
+	int paramno;
+	StringInfoData paramstr;
+
+	if (!ppd)
+		return NULL;
+
+	initStringInfo(&paramstr);
+	for (paramno = 0; paramno < ppd->nargs; paramno++)
+	{
+		appendStringInfo(&paramstr, "%s$%d = ",
+						 paramno > 0 ? ", " : "",
+						 paramno + 1);
+
+		if (ppd->nulls[paramno] == 'n')
+			appendStringInfoString(&paramstr, "NULL");
+		else
+		{
+			char *value = convert_value_to_string(estate, ppd->values[paramno], ppd->types[paramno]);
+			char *p;
+			appendStringInfoCharMacro(&paramstr, '\'');
+			for (p = value; *p; p++)
+			{
+				if (*p == '\'') /* double single quotes */
+					appendStringInfoCharMacro(&paramstr, *p);
+				appendStringInfoCharMacro(&paramstr, *p);
+			}
+			appendStringInfoCharMacro(&paramstr, '\'');
+		}
+	}
+
+	return paramstr.data;
 }
