@@ -155,6 +155,11 @@ initscan(HeapScanDesc scan, ScanKey key, bool is_rescan)
 		 */
 		scan->rs_syncscan = (allow_sync && synchronize_seqscans);
 	}
+	else if (scan->rs_nblocks > 0)
+	{
+		scan->rs_syncscan = false;
+		scan->rs_startblock = (random() % scan->rs_nblocks);
+	}
 	else if (allow_sync && synchronize_seqscans)
 	{
 		scan->rs_syncscan = true;
