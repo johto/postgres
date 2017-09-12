@@ -1193,11 +1193,12 @@ typedef struct ScanState
 	TupleTableSlot *ss_ScanTupleSlot;
 } ScanState;
 
-/*
- * SeqScan uses a bare ScanState as its state node, since it needs
- * no additional fields.
- */
-typedef ScanState SeqScanState;
+typedef struct {
+	ScanState	ss; /* its first field is NodeTag */
+
+	int currentScanTuple;
+	TupleTableSlot *scanTupleSlots[5];
+} SeqScanState;
 
 /*
  * These structs store information about index quals that don't have simple
