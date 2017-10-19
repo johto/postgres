@@ -1139,6 +1139,9 @@ PrintTOCSummary(Archive *AHX)
 		case archTar:
 			fmtName = "TAR";
 			break;
+		case archSplit:
+			fmtName = "SPLIT";
+			break;
 		default:
 			fmtName = "UNKNOWN";
 	}
@@ -2394,6 +2397,10 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 
 		case archTar:
 			InitArchiveFmt_Tar(AH);
+			break;
+
+		case archSplit:
+			InitArchiveFmt_Split(AH);
 			break;
 
 		default:

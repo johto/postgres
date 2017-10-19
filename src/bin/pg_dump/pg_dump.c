@@ -900,8 +900,8 @@ help(const char *progname)
 
 	printf(_("\nGeneral options:\n"));
 	printf(_("  -f, --file=FILENAME          output file or directory name\n"));
-	printf(_("  -F, --format=c|d|t|p         output file format (custom, directory, tar,\n"
-			 "                               plain text (default))\n"));
+	printf(_("  -F, --format=c|d|t|s|p       output file format (custom, directory, tar,\n"
+			 "                               split directory, plain text (default))\n"));
 	printf(_("  -j, --jobs=NUM               use this many parallel jobs to dump\n"));
 	printf(_("  -v, --verbose                verbose mode\n"));
 	printf(_("  -V, --version                output version information, then exit\n"));
@@ -1186,6 +1186,10 @@ parseArchiveFormat(const char *format, ArchiveMode *mode)
 		archiveFormat = archTar;
 	else if (pg_strcasecmp(format, "tar") == 0)
 		archiveFormat = archTar;
+	else if (pg_strcasecmp(format, "s") == 0)
+		archiveFormat = archSplit;
+	else if (pg_strcasecmp(format, "split") == 0)
+		archiveFormat = archSplit;
 	else
 		exit_horribly(NULL, "invalid output format \"%s\" specified\n", format);
 	return archiveFormat;

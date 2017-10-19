@@ -384,6 +384,11 @@ main(int argc, char **argv)
 				opts->format = archTar;
 				break;
 
+			case 's':
+			case 'S':
+				opts->format = archSplit;
+				break;
+
 			default:
 				write_msg(NULL, "unrecognized archive format \"%s\"; please specify \"c\", \"d\", or \"t\"\n",
 						  opts->formatName);
