@@ -35,10 +35,12 @@
 #include "rewrite/rewriteHandler.h"
 #include "storage/fd.h"
 #include "utils/lsyscache.h"
+#include "utils/datum.h"
 #include "utils/ruleutils.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/timestamp.h"
+#include "utils/typcache.h"
 
 
 /*
@@ -830,4 +832,108 @@ pg_get_replica_identity_index(PG_FUNCTION_ARGS)
 		PG_RETURN_OID(idxoid);
 	else
 		PG_RETURN_NULL();
+}
+
+struct single_value_agg_stype
+{
+	FmgrInfo proc;
+	Datum datum;
+	bool isnull;
+};
+
+Datum
+single_value_agg_transfn(PG_FUNCTION_ARGS)
+{
+	MemoryContext aggcontext;
+	struct single_value_agg_stype *state;
+	Oid collation = PG_GET_COLLATION();
+
+	if (!AggCheckCallContext(fcinfo, &aggcontext))
+	{
+		/* cannot be called directly because of internal-type argument */
+		elog(ERROR, "single_value_agg_transfn called in non-aggregate context");
+	}
+
+	if (PG_ARGISNULL(0))
+	{
+		TypeCacheEntry *typentry;
+		Oid arg1_typeid = get_fn_expr_argtype(fcinfo->flinfo, 1);
+
+		if (arg1_typeid == InvalidOid)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("could not determine input data type")));
+
+		typentry = lookup_type_cache(arg1_typeid, TYPECACHE_EQ_OPR_FINFO);
+		if (!OidIsValid(typentry->eq_opr_finfo.fn_oid))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_FUNCTION),
+					 errmsg("could not identify an equality operator for type %s",
+							format_type_be(arg1_typeid))));
+
+		state = (struct single_value_agg_stype *) MemoryContextAlloc(aggcontext, sizeof(struct single_value_agg_stype));
+
+		if (PG_ARGISNULL(1))
+		{
+			state->datum = (Datum) 0;
+			state->isnull = true;
+			memset(&state->proc, 0, sizeof(state->proc));
+		}
+		else
+		{
+			int16 typlen;
+			bool typbyval;
+			char typalign;
+			Datum dvalue = PG_GETARG_DATUM(1);
+			MemoryContext oldcxt = MemoryContextSwitchTo(aggcontext);
+
+			get_typlenbyvalalign(arg1_typeid, &typlen, &typbyval, &typalign);
+
+			if (typbyval)
+				state->datum = dvalue;
+			else
+				state->datum = datumCopy(dvalue, typbyval, typlen);
+			state->isnull = false;
+			fmgr_info_cxt(typentry->eq_opr_finfo.fn_oid, &state->proc,
+						  fcinfo->flinfo->fn_mcxt);
+			MemoryContextSwitchTo(oldcxt);
+		}
+	}
+	else
+	{
+		bool oprresult;
+
+		state = (struct single_value_agg_stype *) PG_GETARG_POINTER(0);
+
+		if (state->isnull)
+			oprresult = PG_ARGISNULL(1);
+		else if (PG_ARGISNULL(1))
+			oprresult = false;
+		else
+			oprresult = DatumGetBool(FunctionCall2Coll(&state->proc, collation,
+													   state->datum, PG_GETARG_DATUM(1)));
+		if (!oprresult)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("more than one distinct value passed to single_value")));
+	}
+
+	PG_RETURN_POINTER(state);
+}
+
+Datum
+single_value_agg_finalfn(PG_FUNCTION_ARGS)
+{
+	struct single_value_agg_stype *state;
+
+	/* cannot be called directly because of internal-type argument */
+	Assert(AggCheckCallContext(fcinfo, NULL));
+
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+
+	state = (struct single_value_agg_stype *) PG_GETARG_POINTER(0);
+	if (state->isnull)
+		PG_RETURN_NULL();
+	PG_RETURN_DATUM(state->datum);
 }

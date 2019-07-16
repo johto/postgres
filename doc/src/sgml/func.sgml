@@ -14849,6 +14849,26 @@ NULL baz</literallayout>(3 rows)</entry>
      <row>
       <entry>
        <indexterm>
+        <primary>single_value</primary>
+       </indexterm>
+       <function>
+         single_value(<replaceable class="parameter">expression</replaceable>)
+       </function>
+      </entry>
+      <entry>
+       any type for which the equality operator has been defined
+      </entry>
+      <entry>
+       same as argument type
+      </entry>
+      <entry>returns the single distinct value from the input values;
+      if more than one distinct value exists (while considering NULLs equal),
+      an exception is raised</entry>
+     </row>
+
+     <row>
+      <entry>
+       <indexterm>
         <primary>string_agg</primary>
        </indexterm>
        <function>

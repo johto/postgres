@@ -9330,6 +9330,20 @@
   proname => 'jsonb_path_match_opr', prorettype => 'bool',
   proargtypes => 'jsonb jsonpath', prosrc => 'jsonb_path_match_opr' },
 
+# single_value
+{ oid => '5555', descr => 'single_value aggregate transition function',
+  proname => 'single_value_agg_transfn', proisstrict => 'f', provolatile => 's',
+  prorettype => 'internal', proargtypes => 'internal anyelement',
+  prosrc => 'single_value_agg_transfn' },
+{ oid => '5556', descr => 'single_value aggregate final function',
+  proname => 'single_value_agg_finalfn', proisstrict => 'f', provolatile => 's',
+  prorettype => 'anyelement', proargtypes => 'internal anyelement',
+  prosrc => 'single_value_agg_finalfn' },
+{ oid => '5557', descr => 'return the single distinct value from aggregate input',
+  proname => 'single_value', prokind => 'a', proisstrict => 'f',
+  prorettype => 'anyelement', proargtypes => 'anyelement',
+  prosrc => 'aggregate_dummy' },
+
 # txid
 { oid => '2939', descr => 'I/O',
   proname => 'txid_snapshot_in', prorettype => 'txid_snapshot',

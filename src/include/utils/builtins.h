@@ -52,6 +52,9 @@ extern char *pg_ltostr_zeropad(char *str, int32 value, int32 minwidth);
 extern char *pg_ltostr(char *str, int32 value);
 extern uint64 pg_strtouint64(const char *str, char **endptr, int base);
 
+extern Datum single_value_agg_transfn(PG_FUNCTION_ARGS);
+extern Datum single_value_agg_finalfn(PG_FUNCTION_ARGS);
+
 /* oid.c */
 extern oidvector *buildoidvector(const Oid *oids, int n);
 extern Oid	oidparse(Node *node);

@@ -586,6 +586,34 @@ select string_agg(v, decode('ee', 'hex')) from bytea_test_table;
 
 drop table bytea_test_table;
 
+-- single_value
+
+select single_value(vv.v) from (values (1), (1)) vv(v);
+select single_value(vv.v) from (values (1), (2)) vv(v);
+select single_value(vv.v) from (values (1), (NULL)) vv(v);
+select single_value(vv.v) from (values (NULL), (1)) vv(v);
+select single_value(vv.v) from (values (NULL), (NULL)) vv(v);
+select single_value(vv.v) filter (where vv.v IS NOT NULL) from (values (null), (1)) vv(v);
+select single_value(vv.v) from (values (json '{}')) vv(v);
+select single_value(vv.v1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+select vv.v2, single_value(vv.v1) from (values (1,1), (2,2), (2,2), (3,3)) vv(v1, v2) group by vv.v2;
+select single_value(vv.v1) filter (where vv.v2 = 1) from (values (1,1), (2,2), (3,3)) vv(v1, v2);
+select single_value(1) where false;
+select single_value(vv.v) from (values (row(1,1)), (row(1,1))) vv(v);
+select single_value(vv.v) from (values (row(1,1)), (row(1,2))) vv(v);
+select single_value(vv.v) from (values (NULL), (row(1,2))) vv(v);
+select single_value(vv.v) from (values (row(1,1)), (NULL)) vv(v);
+select single_value(t) from (values (1,'One'), (1,'One')) t(x,y);
+select single_value(t) from (values (1,'One'), (2,'One')) t(x,y);
+select single_value(t) from (values (1,'One'), (NULL,'One')) t(x,y);
+select single_value(t) from (values (1,'One'), (NULL,NULL)) t(x,y);
+
+-- equal values, but some are TOASTed
+create table toast_test_table(a text);
+insert into toast_test_table values (repeat('abc', 4096)), (repeat('abc', 4096));
+select octet_length(single_value(vv.v)) from (select a from toast_test_table union all select repeat('abc', 4096)) vv(v);
+drop table toast_test_table;
+
 -- FILTER tests
 
 select min(unique1) filter (where unique1 > 100) from tenk1;
