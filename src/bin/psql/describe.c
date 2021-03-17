@@ -319,6 +319,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 	bool		showProcedure = strchr(functypes, 'p') != NULL;
 	bool		showTrigger = strchr(functypes, 't') != NULL;
 	bool		showWindow = strchr(functypes, 'w') != NULL;
+	bool		splitArguments = strchr(functypes, 'A') != NULL;
 	bool		have_where;
 	PQExpBufferData buf;
 	PGresult   *res;
@@ -328,7 +329,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 	/* No "Parallel" column before 9.6 */
 	static const bool translate_columns_pre_96[] = {false, false, false, false, true, true, false, true, false, false, false, false};
 
-	if (strlen(functypes) != strspn(functypes, "anptwS+"))
+	if (strlen(functypes) != strspn(functypes, "anptwAS+"))
 	{
 		pg_log_error("\\df only takes [anptwS+] as options");
 		return true;
@@ -374,9 +375,15 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 					  gettext_noop("Name"));
 
 	if (pset.sversion >= 110000)
+	{
+		const char *args;
+		if (splitArguments)
+			args = "replace(pg_catalog.pg_get_function_arguments(p.oid), ', ', E',\n')";
+		else
+			args = "pg_catalog.pg_get_function_arguments(p.oid)";
 		appendPQExpBuffer(&buf,
 						  "  pg_catalog.pg_get_function_result(p.oid) as \"%s\",\n"
-						  "  pg_catalog.pg_get_function_arguments(p.oid) as \"%s\",\n"
+						  "  %s as \"%s\",\n"
 						  " CASE p.prokind\n"
 						  "  WHEN 'a' THEN '%s'\n"
 						  "  WHEN 'w' THEN '%s'\n"
@@ -384,6 +391,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 						  "  ELSE '%s'\n"
 						  " END as \"%s\"",
 						  gettext_noop("Result data type"),
+						  args,
 						  gettext_noop("Argument data types"),
 		/* translator: "agg" is short for "aggregate" */
 						  gettext_noop("agg"),
@@ -391,10 +399,17 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 						  gettext_noop("proc"),
 						  gettext_noop("func"),
 						  gettext_noop("Type"));
+	}
 	else if (pset.sversion >= 80400)
+	{
+		const char *args;
+		if (splitArguments)
+			args = "replace(pg_catalog.pg_get_function_arguments(p.oid), ', ', E',\n')";
+		else
+			args = "pg_catalog.pg_get_function_arguments(p.oid)";
 		appendPQExpBuffer(&buf,
 						  "  pg_catalog.pg_get_function_result(p.oid) as \"%s\",\n"
-						  "  pg_catalog.pg_get_function_arguments(p.oid) as \"%s\",\n"
+						  "  %s as \"%s\",\n"
 						  " CASE\n"
 						  "  WHEN p.proisagg THEN '%s'\n"
 						  "  WHEN p.proiswindow THEN '%s'\n"
@@ -402,6 +417,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 						  "  ELSE '%s'\n"
 						  " END as \"%s\"",
 						  gettext_noop("Result data type"),
+						  args,
 						  gettext_noop("Argument data types"),
 		/* translator: "agg" is short for "aggregate" */
 						  gettext_noop("agg"),
@@ -409,6 +425,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 						  gettext_noop("trigger"),
 						  gettext_noop("func"),
 						  gettext_noop("Type"));
+	}
 	else if (pset.sversion >= 80100)
 		appendPQExpBuffer(&buf,
 						  "  CASE WHEN p.proretset THEN 'SETOF ' ELSE '' END ||\n"
