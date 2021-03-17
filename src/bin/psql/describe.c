@@ -369,7 +369,7 @@ describeFunctions(const char *functypes, const char *pattern, bool verbose, bool
 
 	printfPQExpBuffer(&buf,
 					  "SELECT n.nspname as \"%s\",\n"
-					  "  p.proname as \"%s\",\n",
+					  "  format('%%s(%%s)', p.proname, p.oid) as \"%s\",\n",
 					  gettext_noop("Schema"),
 					  gettext_noop("Name"));
 
