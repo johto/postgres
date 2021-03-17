@@ -3450,6 +3450,19 @@ printQuery(const PGresult *result, const printQueryOpt *opt,
 
 			if (PQgetisnull(result, r, c))
 				cell = opt->nullPrint ? opt->nullPrint : "";
+			else if (PQftype(result, c) == BOOLOID)
+			{
+				cell = PQgetvalue(result, r, c);
+				if (cell[0] == 't')
+					cell = "✓";
+				else if (cell[0] == 'f')
+					cell = "✗";
+				else
+				{
+					fprintf(stderr, "invalid boolean value %s", cell);
+					exit(EXIT_FAILURE);
+				}
+			}
 			else
 			{
 				cell = PQgetvalue(result, r, c);
